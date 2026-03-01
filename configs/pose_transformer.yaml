@@ -1,0 +1,48 @@
+## Approach A: Pose/Keypoint Transformer
+## This is the recommended starting configuration.
+
+approach: pose_transformer
+wlasl_variant: 300
+num_classes: 100
+num_keypoints: 543
+
+# Temporal
+T: 64
+
+# Model architecture
+d_model: 256
+nhead: 8
+num_layers: 4
+dropout: 0.3
+
+# Training
+epochs: 100
+batch_size: 32
+lr: 1.0e-3
+weight_decay: 1.0e-4
+warmup_epochs: 10
+label_smoothing: 0.1
+grad_clip: 1.0
+fp16: true
+weighted_sampling: false
+early_stopping_patience: 20
+
+# Scheduler
+scheduler: onecycle
+
+# Logging
+use_wandb: false
+use_tensorboard: true
+log_interval: 10
+
+# Inference
+confidence_threshold: 0.6
+smoothing_window: 5
+buffer_size: 64
+fps_display: true
+
+# Paths
+data_dir: data
+output_dir: outputs
+checkpoint_dir: checkpoints
+log_dir: logs

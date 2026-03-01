@@ -1,0 +1,52 @@
+# Virtual environment
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Data (downloaded/generated)
+data/raw/*
+data/processed/*
+data/splits/*
+data/annotations/*
+data/valid_ids.txt
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/splits/.gitkeep
+!data/annotations/.gitkeep
+
+# Model checkpoints & logs (generated during training)
+checkpoints/*
+logs/*
+eval_results/
+outputs/
+!checkpoints/.gitkeep
+!logs/.gitkeep
+
+# ONNX exports
+*.onnx
+
+# Cloned WLASL repo (not part of this project)
+WLASL/
+
+# Claude Code internals
+.claude/agent-memory/
+.claude/agents/
+.claude/settings.local.json
+
+# Wandb
+wandb/

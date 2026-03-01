@@ -1,0 +1,55 @@
+## Approach C: Hybrid Fusion (Pose + Video)
+## Combines Approach A and B for best accuracy.
+
+approach: fusion
+fusion: concat
+fusion_dim: 256
+
+# Sub-model configs
+backbone: r2plus1d_18
+pretrained: true
+num_keypoints: 543
+
+# Dataset
+wlasl_variant: 100
+num_classes: 100
+T: 64
+image_size: 224
+
+# Pose Transformer settings
+d_model: 256
+nhead: 8
+num_layers: 4
+dropout: 0.3
+
+# Training
+epochs: 100
+batch_size: 16
+lr: 1.0e-4
+weight_decay: 1.0e-4
+warmup_epochs: 10
+label_smoothing: 0.1
+grad_clip: 1.0
+fp16: true
+weighted_sampling: false
+early_stopping_patience: 25
+
+# Scheduler
+scheduler: onecycle
+
+# Logging
+use_wandb: false
+use_tensorboard: true
+log_interval: 10
+
+# Inference
+confidence_threshold: 0.6
+smoothing_window: 5
+buffer_size: 64
+fps_display: true
+
+# Paths
+data_dir: data
+output_dir: outputs
+checkpoint_dir: checkpoints
+log_dir: logs
