@@ -311,10 +311,13 @@ def extract_keypoints_mediapipe(
 
 
 def normalize_keypoints(keypoints: np.ndarray) -> np.ndarray:
-    """Normalize keypoint coordinates relative to the nose and shoulder width.
+    """Normalize keypoint coordinates relative to the shoulder midpoint and width.
 
-    1. Translate so pose landmark 0 (nose) is at the origin for every frame.
-    2. Scale so the shoulder width (distance between landmarks 11 and 12) is 1.
+    1. Interpolate zero-padded frames (detection failures) from nearest valid frames.
+    2. Translate so the shoulder midpoint (average of landmarks 11 and 12)
+       is at the origin for every frame.  The shoulder midpoint is more
+       stable than the nose, which moves during signing (head tilts, nods).
+    3. Scale so the shoulder width (distance between landmarks 11 and 12) is 1.
 
     Parameters
     ----------
@@ -329,11 +332,27 @@ def normalize_keypoints(keypoints: np.ndarray) -> np.ndarray:
     kps = keypoints.copy()
     T = kps.shape[0]
 
-    # Nose is pose index 0 (first landmark overall)
-    nose = kps[:, 0:1, :]  # (T, 1, 3)
-    kps = kps - nose  # translate to nose-centered
+    # --- Interpolate zero-padded frames ---
+    # A frame is considered "empty" if all keypoints are zero (detection failure).
+    frame_norms = np.linalg.norm(kps.reshape(T, -1), axis=-1)  # (T,)
+    valid_mask = frame_norms > 1e-6
+    valid_indices = np.where(valid_mask)[0]
 
-    # Shoulder width: pose index 11 (left shoulder) and 12 (right shoulder)
+    if len(valid_indices) > 0 and len(valid_indices) < T:
+        # Interpolate each missing frame from the nearest valid frame
+        for t in range(T):
+            if not valid_mask[t]:
+                # Find nearest valid frame
+                distances = np.abs(valid_indices - t)
+                nearest = valid_indices[np.argmin(distances)]
+                kps[t] = kps[nearest]
+
+    # --- Center on shoulder midpoint ---
+    # Shoulder midpoint: average of pose landmark 11 (left) and 12 (right)
+    shoulder_mid = (kps[:, 11:12, :] + kps[:, 12:13, :]) / 2.0  # (T, 1, 3)
+    kps = kps - shoulder_mid
+
+    # --- Scale by shoulder width ---
     left_shoulder = kps[:, 11, :]  # (T, 3)
     right_shoulder = kps[:, 12, :]  # (T, 3)
     shoulder_width = np.linalg.norm(left_shoulder - right_shoulder, axis=-1)  # (T,)

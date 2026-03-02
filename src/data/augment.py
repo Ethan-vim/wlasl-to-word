@@ -294,6 +294,133 @@ class KeypointScale:
         return keypoints * scale
 
 
+class KeypointRotation:
+    """Randomly rotate keypoints in the x-y plane around the origin.
+
+    Parameters
+    ----------
+    max_angle : float
+        Maximum rotation angle in degrees.
+    p : float
+        Probability of applying the rotation.
+    """
+
+    def __init__(self, max_angle: float = 15.0, p: float = 0.5) -> None:
+        self.max_angle = max_angle
+        self.p = p
+
+    def __call__(self, keypoints: np.ndarray) -> np.ndarray:
+        if np.random.random() >= self.p:
+            return keypoints
+
+        kps = keypoints.copy()
+        is_flat = kps.ndim == 2 and kps.shape[1] != 3
+        if is_flat:
+            T = kps.shape[0]
+            num_kp = kps.shape[1] // 3
+            kps = kps.reshape(T, num_kp, 3)
+
+        angle = np.random.uniform(-self.max_angle, self.max_angle)
+        rad = np.deg2rad(angle)
+        cos_a, sin_a = np.cos(rad), np.sin(rad)
+
+        x = kps[..., 0].copy()
+        y = kps[..., 1].copy()
+        kps[..., 0] = cos_a * x - sin_a * y
+        kps[..., 1] = sin_a * x + cos_a * y
+
+        if is_flat:
+            kps = kps.reshape(T, -1)
+        return kps
+
+
+class KeypointTranslation:
+    """Randomly translate keypoints in x-y space.
+
+    Parameters
+    ----------
+    max_shift : float
+        Maximum shift magnitude in each direction.
+    p : float
+        Probability of applying the translation.
+    """
+
+    def __init__(self, max_shift: float = 0.1, p: float = 0.5) -> None:
+        self.max_shift = max_shift
+        self.p = p
+
+    def __call__(self, keypoints: np.ndarray) -> np.ndarray:
+        if np.random.random() >= self.p:
+            return keypoints
+
+        kps = keypoints.copy()
+        is_flat = kps.ndim == 2 and kps.shape[1] != 3
+        if is_flat:
+            T = kps.shape[0]
+            num_kp = kps.shape[1] // 3
+            kps = kps.reshape(T, num_kp, 3)
+
+        dx = np.random.uniform(-self.max_shift, self.max_shift)
+        dy = np.random.uniform(-self.max_shift, self.max_shift)
+        kps[..., 0] += dx
+        kps[..., 1] += dy
+
+        if is_flat:
+            kps = kps.reshape(T, -1)
+        return kps
+
+
+class KeypointDropout:
+    """Randomly zero out entire frames and individual landmarks.
+
+    Parameters
+    ----------
+    frame_drop_rate : float
+        Fraction of frames to zero out entirely.
+    landmark_drop_rate : float
+        Fraction of individual landmarks to zero out per frame.
+    p : float
+        Probability of applying this augmentation.
+    """
+
+    def __init__(
+        self,
+        frame_drop_rate: float = 0.1,
+        landmark_drop_rate: float = 0.05,
+        p: float = 0.5,
+    ) -> None:
+        self.frame_drop_rate = frame_drop_rate
+        self.landmark_drop_rate = landmark_drop_rate
+        self.p = p
+
+    def __call__(self, keypoints: np.ndarray) -> np.ndarray:
+        if np.random.random() >= self.p:
+            return keypoints
+
+        kps = keypoints.copy()
+        is_flat = kps.ndim == 2 and kps.shape[1] != 3
+        if is_flat:
+            T = kps.shape[0]
+            num_kp = kps.shape[1] // 3
+            kps = kps.reshape(T, num_kp, 3)
+
+        T = kps.shape[0]
+        num_kp = kps.shape[1]
+
+        # Drop entire frames
+        frame_mask = np.random.random(T) < self.frame_drop_rate
+        kps[frame_mask] = 0.0
+
+        # Drop individual landmarks (on non-dropped frames)
+        lm_mask = np.random.random((T, num_kp)) < self.landmark_drop_rate
+        lm_mask[frame_mask] = False  # already zeroed
+        kps[lm_mask] = 0.0
+
+        if is_flat:
+            kps = kps.reshape(kps.shape[0], -1)
+        return kps
+
+
 # ---------------------------------------------------------------------------
 # Compose and presets
 # ---------------------------------------------------------------------------
@@ -333,11 +460,13 @@ def get_train_transforms(T: int = 64) -> Compose:
     return Compose(
         [
             TemporalSpeedPerturb(low=0.85, high=1.15),
-            TemporalFlip(p=0.3),
             TemporalCrop(T=T),
             KeypointHorizontalFlip(p=0.5, centered=True),
-            KeypointNoise(sigma=0.005),
+            KeypointRotation(max_angle=15, p=0.5),
+            KeypointTranslation(max_shift=0.1, p=0.5),
+            KeypointNoise(sigma=0.02),
             KeypointScale(low=0.9, high=1.1),
+            KeypointDropout(frame_drop_rate=0.1, landmark_drop_rate=0.05, p=0.5),
         ]
     )
 

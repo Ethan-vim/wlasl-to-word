@@ -24,7 +24,8 @@ class WLASLKeypointDataset(Dataset):
 
     Each sample is a tuple ``(keypoints_tensor, label)`` where
     ``keypoints_tensor`` has shape ``(T, num_features)`` with features
-    being the flattened ``(x, y, z)`` per landmark.
+    being the flattened ``(x, y, z)`` per landmark, optionally
+    concatenated with velocity features when ``use_motion=True``.
 
     Parameters
     ----------
@@ -37,6 +38,9 @@ class WLASLKeypointDataset(Dataset):
     T : int
         Target sequence length.  If the transform does not include a
         ``TemporalCrop``, this dataset will pad/crop to ``T``.
+    use_motion : bool
+        If True, append velocity (frame differences) to each frame's
+        features, doubling the per-landmark feature count from 3 to 6.
     """
 
     def __init__(
@@ -45,10 +49,12 @@ class WLASLKeypointDataset(Dataset):
         keypoint_dir: str | Path,
         transform: Optional[Callable] = None,
         T: int = 64,
+        use_motion: bool = False,
     ) -> None:
         self.keypoint_dir = Path(keypoint_dir)
         self.transform = transform
         self.T = T
+        self.use_motion = use_motion
 
         df = pd.read_csv(split_csv)
         # Filter to only rows whose .npy file exists
@@ -56,10 +62,12 @@ class WLASLKeypointDataset(Dataset):
             lambda vid: (self.keypoint_dir / f"{vid}.npy").exists()
         )
         self.df = df[valid_mask].reset_index(drop=True)
-        if len(self.df) < len(df):
+        n_missing = len(df) - len(self.df)
+        if n_missing > 0:
             logger.warning(
-                "Filtered %d / %d samples (missing .npy files)",
-                len(df) - len(self.df),
+                "Filtered %d / %d samples (missing .npy files). "
+                "Run preprocessing or download more videos to increase coverage.",
+                n_missing,
                 len(df),
             )
 
@@ -73,6 +81,16 @@ class WLASLKeypointDataset(Dataset):
             self.gloss_to_label[row["gloss"]] = int(row["label_idx"])
 
         self.num_classes = self.df["label_idx"].nunique()
+
+        # Warn about sparse data
+        total_classes_in_csv = df["label_idx"].nunique()
+        if self.num_classes < total_classes_in_csv:
+            logger.warning(
+                "%d / %d classes in the split have no usable data (missing .npy files).",
+                total_classes_in_csv - self.num_classes,
+                total_classes_in_csv,
+            )
+
         logger.info(
             "WLASLKeypointDataset: %d samples, %d classes", len(self.df), self.num_classes
         )
@@ -94,10 +112,21 @@ class WLASLKeypointDataset(Dataset):
         if keypoints.shape[0] != self.T:
             keypoints = self._pad_or_crop(keypoints)
 
-        # Flatten spatial dims: (T, 543, 3) -> (T, 543*3)
-        if keypoints.ndim == 3:
-            T, K, C = keypoints.shape
-            keypoints = keypoints.reshape(T, K * C)
+        # Ensure 3D shape: (T, K, 3)
+        if keypoints.ndim == 2:
+            T = keypoints.shape[0]
+            keypoints = keypoints.reshape(T, -1, 3)
+
+        if self.use_motion:
+            # Compute velocity (frame differences); first frame velocity is zero
+            velocity = np.zeros_like(keypoints)
+            velocity[1:] = keypoints[1:] - keypoints[:-1]
+            # Concatenate: (T, K, 3) + (T, K, 3) -> (T, K, 6)
+            keypoints = np.concatenate([keypoints, velocity], axis=-1)
+
+        # Flatten spatial dims: (T, K, C) -> (T, K*C)
+        T, K, C = keypoints.shape
+        keypoints = keypoints.reshape(T, K * C)
 
         tensor = torch.from_numpy(keypoints).float()
         return tensor, label

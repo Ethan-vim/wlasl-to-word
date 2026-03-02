@@ -50,6 +50,9 @@ class Config:
     fusion: str = "concat"  # concat or attention
     fusion_dim: int = 256
 
+    # --- Features ---
+    use_motion: bool = True  # Concatenate velocity (frame differences) with position
+
     # --- Training ---
     epochs: int = 100
     batch_size: int = 32
@@ -61,6 +64,7 @@ class Config:
     fp16: bool = True
     weighted_sampling: bool = False
     early_stopping_patience: int = 20
+    mixup_alpha: float = 0.2  # Mixup interpolation parameter (0 = disabled)
 
     # --- Scheduler ---
     scheduler: str = "onecycle"  # onecycle or cosine
@@ -71,6 +75,9 @@ class Config:
     wandb_project: str = "wlasl-recognition"
     wandb_run_name: Optional[str] = None
     log_interval: int = 10  # steps between logging
+
+    # --- Evaluation ---
+    use_tta: bool = False  # Test-time augmentation (horizontal flip averaging)
 
     # --- Inference ---
     confidence_threshold: float = 0.6

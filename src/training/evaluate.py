@@ -22,7 +22,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.data.augment import get_val_transforms
+from src.data.augment import get_val_transforms, KeypointHorizontalFlip
 from src.data.dataset import (
     WLASLKeypointDataset,
     WLASLVideoDataset,
@@ -38,6 +38,49 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Test-Time Augmentation
+# ---------------------------------------------------------------------------
+
+_hflip = KeypointHorizontalFlip(p=1.0, centered=True)
+
+
+def _flip_keypoints_tensor(x: torch.Tensor, num_keypoints: int = 543) -> torch.Tensor:
+    """Horizontally flip a batch of flattened keypoint tensors.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        Shape ``(B, T, num_keypoints * C)`` where C is 3 or 6 (with velocity).
+    num_keypoints : int
+        Number of keypoints.
+
+    Returns
+    -------
+    torch.Tensor
+        Flipped tensor with the same shape.
+    """
+    B, T, F = x.shape
+    C = F // num_keypoints  # 3 or 6
+    flipped = x.clone().cpu().numpy()
+    for i in range(B):
+        sample = flipped[i]  # (T, K*C)
+        if C == 6:
+            # Split position and velocity, flip each, recombine
+            sample_3d = sample.reshape(T, num_keypoints, C)
+            pos = sample_3d[:, :, :3].copy()
+            vel = sample_3d[:, :, 3:].copy()
+            pos = _hflip(pos)
+            vel = _hflip(vel)
+            sample_3d = np.concatenate([pos, vel], axis=-1)
+            flipped[i] = sample_3d.reshape(T, -1)
+        else:
+            sample_3d = sample.reshape(T, num_keypoints, 3)
+            sample_3d = _hflip(sample_3d)
+            flipped[i] = sample_3d.reshape(T, -1)
+    return torch.from_numpy(flipped).to(x.device)
+
+
+# ---------------------------------------------------------------------------
 # Core metrics
 # ---------------------------------------------------------------------------
 
@@ -49,6 +92,8 @@ def compute_metrics(
     device: torch.device,
     class_names: list[str],
     approach: str = "pose_transformer",
+    use_tta: bool = False,
+    num_keypoints: int = 543,
 ) -> dict:
     """Compute comprehensive evaluation metrics.
 
@@ -86,6 +131,13 @@ def compute_metrics(
             inputs = batch[0].to(device, non_blocking=True)
             targets = batch[1].to(device, non_blocking=True)
             logits = model(inputs)
+
+            # Test-Time Augmentation: average logits from original + h-flipped
+            if use_tta and approach != "fusion":
+                flipped = _flip_keypoints_tensor(inputs, num_keypoints=num_keypoints)
+                logits_flip = model(flipped)
+                logits = (logits + logits_flip) / 2.0
+
         probs = torch.softmax(logits, dim=1)
 
         preds = logits.argmax(dim=1)
@@ -296,16 +348,22 @@ def evaluate_latency(
 
     if device.type == "cuda":
         torch.cuda.synchronize()
+    elif device.type == "mps":
+        torch.mps.synchronize()
 
     times_ms: list[float] = []
     for _ in range(n_runs):
         if device.type == "cuda":
             torch.cuda.synchronize()
+        elif device.type == "mps":
+            torch.mps.synchronize()
         t0 = time.perf_counter()
         with torch.no_grad():
             _ = model(dummy)
         if device.type == "cuda":
             torch.cuda.synchronize()
+        elif device.type == "mps":
+            torch.mps.synchronize()
         t1 = time.perf_counter()
         times_ms.append((t1 - t0) * 1000.0)
 
@@ -372,7 +430,12 @@ def main() -> None:
     )
 
     cfg = load_config(args.config)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
 
     # Build and load model
     model = _build_model(cfg, device)
@@ -391,6 +454,7 @@ def main() -> None:
             keypoint_dir=data_dir / "processed",
             transform=transform,
             T=cfg.T,
+            use_motion=getattr(cfg, "use_motion", False),
         )
     elif cfg.approach == "video":
         dataset = WLASLVideoDataset(
@@ -428,8 +492,13 @@ def main() -> None:
                 if idx < cfg.num_classes and not class_names[idx]:
                     class_names[idx] = row["gloss"]
 
-    # Compute metrics (single inference pass)
-    metrics = compute_metrics(model, loader, device, class_names, approach=cfg.approach)
+    # Compute metrics (single inference pass, with optional TTA)
+    metrics = compute_metrics(
+        model, loader, device, class_names,
+        approach=cfg.approach,
+        use_tta=getattr(cfg, "use_tta", False),
+        num_keypoints=cfg.num_keypoints,
+    )
     logger.info("Top-1 Accuracy: %.2f%%", metrics["top1"])
     logger.info("Top-5 Accuracy: %.2f%%", metrics["top5"])
 
@@ -450,7 +519,8 @@ def main() -> None:
 
     # Latency benchmark (skipped for fusion — requires dual inputs)
     if cfg.approach in ("pose_transformer", "pose_bilstm"):
-        input_shape = (cfg.T, cfg.num_keypoints * 3)
+        features_per_kp = 6 if getattr(cfg, "use_motion", False) else 3
+        input_shape = (cfg.T, cfg.num_keypoints * features_per_kp)
         latency = evaluate_latency(model, device, input_shape)
         logger.info(
             "Latency: %.1f ms (std=%.1f, min=%.1f, max=%.1f) | FPS: %.1f",

@@ -12,7 +12,7 @@ num_keypoints: 543
 
 # Dataset
 wlasl_variant: 100
-num_classes: 100
+# num_classes is auto-derived from wlasl_variant (100 -> 100, 300 -> 300, etc.)
 T: 64
 image_size: 224
 

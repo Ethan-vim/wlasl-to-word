@@ -53,7 +53,8 @@ def export_to_onnx(
 
     # Create dummy input
     if cfg.approach in ("pose_transformer", "pose_bilstm"):
-        dummy_input = torch.randn(1, cfg.T, cfg.num_keypoints * 3)
+        features_per_kp = 6 if getattr(cfg, "use_motion", False) else 3
+        dummy_input = torch.randn(1, cfg.T, cfg.num_keypoints * features_per_kp)
         input_names = ["keypoints"]
         dynamic_axes = {"keypoints": {0: "batch_size"}, "logits": {0: "batch_size"}}
     elif cfg.approach == "video":
@@ -120,7 +121,8 @@ def verify_onnx(
 
     # Create dummy input
     if cfg.approach in ("pose_transformer", "pose_bilstm"):
-        dummy = np.random.randn(1, cfg.T, cfg.num_keypoints * 3).astype(np.float32)
+        features_per_kp = 6 if getattr(cfg, "use_motion", False) else 3
+        dummy = np.random.randn(1, cfg.T, cfg.num_keypoints * features_per_kp).astype(np.float32)
         input_name = "keypoints"
     elif cfg.approach == "video":
         dummy = np.random.randn(1, 3, cfg.T, cfg.image_size, cfg.image_size).astype(np.float32)
@@ -176,7 +178,8 @@ def benchmark_onnx(
 
     # Create dummy input
     if cfg.approach in ("pose_transformer", "pose_bilstm"):
-        dummy = np.random.randn(1, cfg.T, cfg.num_keypoints * 3).astype(np.float32)
+        features_per_kp = 6 if getattr(cfg, "use_motion", False) else 3
+        dummy = np.random.randn(1, cfg.T, cfg.num_keypoints * features_per_kp).astype(np.float32)
         input_name = "keypoints"
     elif cfg.approach == "video":
         dummy = np.random.randn(1, 3, cfg.T, cfg.image_size, cfg.image_size).astype(np.float32)

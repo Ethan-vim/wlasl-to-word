@@ -5,7 +5,7 @@ approach: video
 backbone: r2plus1d_18
 pretrained: true
 wlasl_variant: 100
-num_classes: 100
+# num_classes is auto-derived from wlasl_variant (100 -> 100, 300 -> 300, etc.)
 
 # Temporal & spatial
 T: 32

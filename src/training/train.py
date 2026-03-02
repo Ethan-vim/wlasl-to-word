@@ -15,7 +15,7 @@ from typing import Optional
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.cuda.amp import GradScaler, autocast
+from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -71,6 +71,50 @@ def _accuracy(output: torch.Tensor, target: torch.Tensor, topk: tuple = (1, 5)) 
             correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
             results.append(correct_k.mul_(100.0 / batch_size).item())
         return results
+
+
+# ---------------------------------------------------------------------------
+# Mixup
+# ---------------------------------------------------------------------------
+
+
+def _mixup_data(
+    x: torch.Tensor, y: torch.Tensor, alpha: float = 0.2
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, float]:
+    """Apply mixup to a batch: linearly interpolate random pairs.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        Input batch ``(B, ...)``.
+    y : torch.Tensor
+        Label batch ``(B,)`` (integer class indices).
+    alpha : float
+        Beta distribution parameter.  Higher values produce more mixing.
+
+    Returns
+    -------
+    tuple
+        ``(mixed_x, y_a, y_b, lam)`` where ``mixed_x`` is the interpolated
+        input, ``y_a`` and ``y_b`` are the original and shuffled labels,
+        and ``lam`` is the mixing coefficient.
+    """
+    lam = np.random.beta(alpha, alpha) if alpha > 0 else 1.0
+    batch_size = x.size(0)
+    index = torch.randperm(batch_size, device=x.device)
+    mixed_x = lam * x + (1 - lam) * x[index]
+    return mixed_x, y, y[index], lam
+
+
+def _mixup_criterion(
+    criterion: nn.Module,
+    pred: torch.Tensor,
+    y_a: torch.Tensor,
+    y_b: torch.Tensor,
+    lam: float,
+) -> torch.Tensor:
+    """Compute loss for mixed labels."""
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
 
 
 # ---------------------------------------------------------------------------
@@ -143,15 +187,25 @@ def train_one_epoch(
 
         optimizer.zero_grad(set_to_none=True)
 
-        use_amp = scaler is not None and device.type == "cuda"
-        with autocast(enabled=use_amp):
+        # Mixup
+        use_mixup = cfg.mixup_alpha > 0
+        if use_mixup:
+            pose_input, targets_a, targets_b, lam = _mixup_data(
+                pose_input, targets, alpha=cfg.mixup_alpha
+            )
+
+        use_amp = cfg.fp16 and device.type == "cuda"
+        with torch.amp.autocast(device_type="cuda", enabled=use_amp):
             if cfg.approach == "fusion":
                 logits = model(pose_input, video_input)
             else:
                 logits = model(pose_input)
-            loss = criterion(logits, targets)
+            if use_mixup:
+                loss = _mixup_criterion(criterion, logits, targets_a, targets_b, lam)
+            else:
+                loss = criterion(logits, targets)
 
-        if use_amp:
+        if scaler is not None:
             scaler.scale(loss).backward()
             if cfg.grad_clip > 0:
                 scaler.unscale_(optimizer)
@@ -316,6 +370,22 @@ def _build_datasets(cfg: Config) -> tuple:
     train_csv = splits_dir / "train.csv"
     val_csv = splits_dir / "val.csv"
 
+    # Check that split CSVs exist before trying to build datasets
+    if not train_csv.exists():
+        raise FileNotFoundError(
+            f"Training split not found: {train_csv}\n"
+            f"Run preprocessing first:\n"
+            f"  python -m src.data.preprocess --data-dir {cfg.data_dir} "
+            f"--subset WLASL{cfg.wlasl_variant}"
+        )
+    if not val_csv.exists():
+        raise FileNotFoundError(
+            f"Validation split not found: {val_csv}\n"
+            f"Run preprocessing first:\n"
+            f"  python -m src.data.preprocess --data-dir {cfg.data_dir} "
+            f"--subset WLASL{cfg.wlasl_variant}"
+        )
+
     if cfg.approach in ("pose_transformer", "pose_bilstm"):
         train_transform = get_train_transforms(T=cfg.T)
         val_transform = get_val_transforms(T=cfg.T)
@@ -325,12 +395,14 @@ def _build_datasets(cfg: Config) -> tuple:
             keypoint_dir=processed_dir,
             transform=train_transform,
             T=cfg.T,
+            use_motion=cfg.use_motion,
         )
         val_ds = WLASLKeypointDataset(
             split_csv=val_csv,
             keypoint_dir=processed_dir,
             transform=val_transform,
             T=cfg.T,
+            use_motion=cfg.use_motion,
         )
     elif cfg.approach == "video":
         train_ds = WLASLVideoDataset(
@@ -369,6 +441,33 @@ def _build_datasets(cfg: Config) -> tuple:
     else:
         raise ValueError(f"Unknown approach '{cfg.approach}'")
 
+    # Log data coverage diagnostics
+    train_classes = getattr(train_ds, "num_classes", None)
+    train_len = len(train_ds)
+    val_len = len(val_ds)
+    if train_classes is not None and train_classes < cfg.num_classes:
+        logger.warning(
+            "Only %d / %d classes have training data. Classes without samples "
+            "will not be learned. Consider downloading more videos or using a "
+            "smaller wlasl_variant.",
+            train_classes,
+            cfg.num_classes,
+        )
+    if train_len > 0 and train_len < cfg.num_classes * 3:
+        logger.warning(
+            "Very few training samples (%d) for %d classes (%.1f per class). "
+            "Expect limited accuracy. See README 'Training with Limited Data' "
+            "for tips.",
+            train_len,
+            cfg.num_classes,
+            train_len / cfg.num_classes,
+        )
+    logger.info(
+        "Dataset: %d train / %d val samples",
+        train_len,
+        val_len,
+    )
+
     return train_ds, val_ds
 
 
@@ -386,7 +485,12 @@ def main(cfg: Config) -> None:
         Fully populated configuration.
     """
     # Setup
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     logger.info("Using device: %s", device)
 
     checkpoint_dir = Path(cfg.checkpoint_dir)

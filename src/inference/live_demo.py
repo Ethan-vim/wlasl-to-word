@@ -219,8 +219,14 @@ class LivePredictor:
             indices = np.linspace(0, N - 1, T, dtype=np.int64)
             keypoints = keypoints[indices]
 
+        # Compute velocity if use_motion is enabled
+        if getattr(self.cfg, "use_motion", False):
+            velocity = np.zeros_like(keypoints)
+            velocity[1:] = keypoints[1:] - keypoints[:-1]
+            keypoints = np.concatenate([keypoints, velocity], axis=-1)  # (T, 543, 6)
+
         # Flatten and convert to tensor
-        keypoints_flat = keypoints.reshape(T, -1)  # (T, 543*3)
+        keypoints_flat = keypoints.reshape(T, -1)  # (T, 543*C)
         tensor = torch.from_numpy(keypoints_flat).float().unsqueeze(0).to(self.device)
 
         with torch.no_grad():
@@ -679,8 +685,16 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, required=True, help="YAML config path")
     parser.add_argument("--checkpoint", type=str, required=True, help="Model checkpoint path")
     parser.add_argument("--camera", type=int, default=0, help="Camera device ID")
-    parser.add_argument("--device", type=str, default="cpu", help="Inference device")
+    parser.add_argument("--device", type=str, default="auto", help="Device: auto, cpu, cuda, mps")
     args = parser.parse_args()
+
+    if args.device == "auto":
+        if torch.cuda.is_available():
+            args.device = "cuda"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            args.device = "mps"
+        else:
+            args.device = "cpu"
 
     logging.basicConfig(
         level=logging.INFO,

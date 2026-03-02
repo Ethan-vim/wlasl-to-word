@@ -8,8 +8,8 @@ Live American Sign Language (ASL) recognition system using the WLASL (Word-Level
 
 ## Environment
 
-- Python 3.12 (managed via `./venv`)
-- Activate: `source ./venv/bin/activate`
+- Python 3.12 (managed via `../.venv`)
+- Activate: `source ../.venv/bin/activate`
 - Install dependencies (once requirements.txt is created): `pip install -r requirements.txt`
 - Read PROJECT_DES.md
 - Read README.md

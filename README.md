@@ -290,21 +290,21 @@ All hyperparameters live in YAML files under `configs/`. Key settings:
 |-----------|-------------|---------|
 | `approach` | `pose_transformer`, `pose_bilstm`, `video`, `fusion` | `pose_transformer` |
 | `wlasl_variant` | Dataset size: `100`, `300`, `1000`, `2000` | `100` |
-| `num_classes` | Number of output classes (auto-derived from `wlasl_variant`) | `100` |
+| `num_classes` | Auto-derived from `wlasl_variant` — do not set manually | `100` |
 | `T` | Temporal sequence length in frames | `64` |
 | `d_model` | Transformer embedding dimension | `256` |
 | `nhead` | Number of attention heads | `8` |
 | `num_layers` | Number of encoder layers | `4` |
-| `batch_size` | Training batch size | `32` |
-| `lr` | Learning rate | `1e-4` |
+| `batch_size` | Training batch size | `16` |
+| `lr` | Learning rate | `5e-4` |
 | `epochs` | Maximum training epochs | `100` |
 | `fp16` | Mixed-precision (FP16) training | `true` |
-| `weighted_sampling` | Weighted sampler to counter class imbalance | `false` |
-| `scheduler` | LR scheduler: `onecycle` or `cosine` (warmup + cosine annealing) | `onecycle` |
+| `weighted_sampling` | Weighted sampler to counter class imbalance | `true` |
+| `scheduler` | LR scheduler: `onecycle` or `cosine` (warmup + cosine annealing) | `cosine` |
 | `confidence_threshold` | Minimum confidence for live display | `0.6` |
 | `smoothing_window` | Number of inference windows to smooth predictions over | `5` |
 
-`num_classes` is automatically set to match `wlasl_variant` (100 → 100, 300 → 300, etc.) unless you explicitly override it.
+`num_classes` is **always** auto-derived from `wlasl_variant` (100 → 100, 300 → 300, etc.). Any explicit `num_classes` in the YAML is silently overridden — do not set it manually.
 
 ---
 
@@ -360,6 +360,41 @@ Expired WLASL URLs often return an HTML lander page (saved as `.mp4`) rather tha
 - Check split CSV row counts to ensure enough training videos were downloaded.
 - Enable `weighted_sampling: true` for class-imbalanced subsets.
 - Run the error analysis notebook (`notebooks/03_error_analysis.ipynb`) to find confused class pairs.
+
+### Diagnosing partial data (most common issue)
+
+Many WLASL URLs have expired, so you will likely end up with far fewer usable videos than the annotation file lists. This is the single biggest factor in accuracy. Check your effective dataset size:
+
+```bash
+# Row counts in split CSVs (includes videos you may not have)
+wc -l data/splits/WLASL100/*.csv
+
+# How many .npy keypoint files were actually produced
+ls data/processed/*.npy | wc -l
+
+# Effective training samples (rows in CSV that have matching .npy files)
+python -c "
+import pandas as pd; from pathlib import Path
+train = pd.read_csv('data/splits/WLASL100/train.csv')
+npy = Path('data/processed')
+eff = train[train['video_id'].apply(lambda v: (npy/f'{v}.npy').exists())]
+counts = eff['label_idx'].value_counts()
+print(f'Effective train: {len(eff)} samples, {eff[\"label_idx\"].nunique()} classes')
+print(f'Samples/class: min={counts.min()}, mean={counts.mean():.1f}, max={counts.max()}')
+print(f'Classes with <=2 samples: {(counts<=2).sum()}')
+"
+```
+
+**If effective samples < 500:** Training will be very challenging. The default `configs/pose_transformer.yaml` is already tuned for this scenario (high dropout, weighted sampling, low LR). Expect 30–50% top-1 accuracy.
+
+**To get more data:**
+1. Search Kaggle for "WLASL" dataset mirrors.
+2. Re-run preprocessing after adding new videos — already-processed `.npy` files are skipped automatically.
+3. Try `--subset WLASL300` to include more glosses (you may have videos for classes outside WLASL100).
+
+### `wlasl_variant` / `num_classes` mismatch
+
+`num_classes` is always auto-derived from `wlasl_variant`. If your YAML says `wlasl_variant: 300` but you only preprocessed WLASL100, training will fail because `data/splits/WLASL300/train.csv` does not exist. Make sure `wlasl_variant` in your config matches the subset you preprocessed.
 
 ---
 

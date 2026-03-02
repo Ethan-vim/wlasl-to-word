@@ -6,8 +6,10 @@ Provides two architectures for Approach A:
 - ``PoseTransformer``: Transformer encoder with learnable positional encoding.
 - ``PoseBiLSTM``: Bidirectional 2-layer LSTM alternative.
 
-Both share the same forward interface: input ``(B, T, num_keypoints * 3)``
-and output ``(B, num_classes)`` logits.
+Both share the same forward interface: input ``(B, T, input_dim)``
+and output ``(B, num_classes)`` logits, where ``input_dim`` is
+``num_keypoints * 3`` (position only) or ``num_keypoints * 6``
+(position + velocity when ``use_motion=True``).
 """
 
 import logging
@@ -57,13 +59,16 @@ class PoseTransformer(nn.Module):
         dropout: float = 0.3,
         T: int = 64,
         dim_feedforward: int | None = None,
+        use_motion: bool = False,
     ) -> None:
         super().__init__()
         self.num_keypoints = num_keypoints
         self.d_model = d_model
         self.T = T
+        self.use_motion = use_motion
 
-        input_dim = num_keypoints * 3
+        features_per_kp = 6 if use_motion else 3
+        input_dim = num_keypoints * features_per_kp
         if dim_feedforward is None:
             dim_feedforward = 4 * d_model
 
@@ -193,13 +198,16 @@ class PoseBiLSTM(nn.Module):
         num_layers: int = 2,
         dropout: float = 0.3,
         T: int = 64,
+        use_motion: bool = False,
         **kwargs: Any,
     ) -> None:
         super().__init__()
         self.num_keypoints = num_keypoints
         self.d_model = d_model
+        self.use_motion = use_motion
 
-        input_dim = num_keypoints * 3
+        features_per_kp = 6 if use_motion else 3
+        input_dim = num_keypoints * features_per_kp
         hidden_dim = d_model // 2  # each direction produces hidden_dim
 
         # Input projection
@@ -295,6 +303,7 @@ def build_pose_model(cfg: Any) -> nn.Module:
     num_layers = getattr(cfg, "num_layers", 4)
     dropout = getattr(cfg, "dropout", 0.3)
     T = getattr(cfg, "T", 64)
+    use_motion = getattr(cfg, "use_motion", False)
 
     if approach == "pose_transformer":
         model = PoseTransformer(
@@ -305,6 +314,7 @@ def build_pose_model(cfg: Any) -> nn.Module:
             num_layers=num_layers,
             dropout=dropout,
             T=T,
+            use_motion=use_motion,
         )
     elif approach == "pose_bilstm":
         model = PoseBiLSTM(
@@ -314,6 +324,7 @@ def build_pose_model(cfg: Any) -> nn.Module:
             num_layers=num_layers,
             dropout=dropout,
             T=T,
+            use_motion=use_motion,
         )
     else:
         raise ValueError(

@@ -149,10 +149,20 @@ class SignPredictor:
         # Apply val transforms (temporal crop to T frames)
         keypoints = self.transform(keypoints)
 
-        # Flatten if needed: (T, K, 3) -> (T, K*3)
-        if keypoints.ndim == 3:
-            T, K, C = keypoints.shape
-            keypoints = keypoints.reshape(T, K * C)
+        # Ensure 3D: (T, K, 3)
+        if keypoints.ndim == 2:
+            T = keypoints.shape[0]
+            keypoints = keypoints.reshape(T, -1, 3)
+
+        # Compute velocity if use_motion is enabled
+        if getattr(self.cfg, "use_motion", False):
+            velocity = np.zeros_like(keypoints)
+            velocity[1:] = keypoints[1:] - keypoints[:-1]
+            keypoints = np.concatenate([keypoints, velocity], axis=-1)
+
+        # Flatten: (T, K, C) -> (T, K*C)
+        T, K, C = keypoints.shape
+        keypoints = keypoints.reshape(T, K * C)
 
         # To tensor and add batch dim
         tensor = torch.from_numpy(keypoints).float().unsqueeze(0).to(self.device)
@@ -257,8 +267,16 @@ if __name__ == "__main__":
     parser.add_argument("--keypoints", type=str, help="Path to .npy keypoint file")
     parser.add_argument("--checkpoint", type=str, required=True, help="Model checkpoint")
     parser.add_argument("--config", type=str, required=True, help="YAML config")
-    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--device", type=str, default="auto", help="Device: auto, cpu, cuda, mps")
     args = parser.parse_args()
+
+    if args.device == "auto":
+        if torch.cuda.is_available():
+            args.device = "cuda"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            args.device = "mps"
+        else:
+            args.device = "cpu"
 
     logging.basicConfig(
         level=logging.INFO,
