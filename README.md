@@ -9,8 +9,9 @@ A real-time ASL word-level recognition system that captures live webcam video, p
                     +-------------------------------+
                     |  MediaPipe     Transformer/   |
 Webcam  --> Frame --+  Holistic  --> LSTM Encoder --+--> Predicted
-Feed        Buffer  |  Keypoints    (T, 543*3)     |    Gloss +
-(OpenCV)    (T=64)  +-------------------------------+    Confidence
+Feed        Buffer  |  Keypoints    (T, 543*6)     |    Gloss +
+(OpenCV)    (T=64)  |  + Velocity                  |    Confidence
+                    +-------------------------------+
                     |                               |
                     |  APPROACH B (RGB Video)        |
                     |  R(2+1)D / SlowFast / R3D    |
@@ -27,7 +28,7 @@ Feed        Buffer  |  Keypoints    (T, 543*3)     |    Gloss +
 
 | Approach | Model | Input | WLASL-100 Top-1 (expected) |
 |----------|-------|-------|----------------------------|
-| A - Pose Transformer | Transformer Encoder / BiLSTM | MediaPipe keypoints (T, 543, 3) | 60–70% |
+| A - Pose Transformer | Transformer Encoder / BiLSTM | MediaPipe keypoints (T, 543, 6) with velocity | 60–70% |
 | B - Video Classifier | R(2+1)D-18, R3D-18, SlowFast | RGB frames (3, T, 224, 224) | 65–75% |
 | C - Hybrid Fusion | Concat / Cross-Attention fusion of A+B | Both streams | 70–78% |
 
@@ -52,6 +53,44 @@ pip install -r requirements.txt
 
 ### 2. Download the Dataset
 
+#### Option A: Kaggle (Recommended — fastest)
+
+The full WLASL video archive (~12,000 videos, ~5 GB) is available on [Kaggle](https://www.kaggle.com/datasets/risangbaskoro/wlasl-processed). This is the fastest way to get the data since it downloads as a single archive.
+
+**One-time Kaggle API setup:**
+
+```bash
+# kaggle is already included in requirements.txt, so if you ran
+# pip install -r requirements.txt, it's already installed.
+# Otherwise: pip install kaggle
+
+# Get your API token from https://www.kaggle.com/settings → "Create New Token"
+# Move the downloaded kaggle.json to ~/.kaggle/
+mkdir -p ~/.kaggle
+mv ~/Downloads/kaggle.json ~/.kaggle/kaggle.json
+chmod 600 ~/.kaggle/kaggle.json
+```
+
+**Download:**
+
+```bash
+python scripts/download_kaggle.py --subset WLASL100
+```
+
+This downloads **all** ~12K videos to `data/raw/` (the full archive, regardless of `--subset`), fetches the annotation JSON, and prints a summary of how many videos match the chosen subset. The `--subset` flag only controls the summary output — the download itself always fetches the full dataset.
+
+You can also use the Kaggle CLI directly:
+
+```bash
+kaggle datasets download -d risangbaskoro/wlasl-processed -p data/_kaggle_download --unzip
+mv data/_kaggle_download/videos/*.mp4 data/raw/
+rm -rf data/_kaggle_download
+```
+
+> **Note:** The Kaggle archive contains all ~12K videos for all WLASL variants (100–2000). You only download once — the preprocessing step (Step 3) filters to your chosen subset.
+
+#### Option B: Official WLASL scripts (URL-based)
+
 ```bash
 # Download the WLASL annotation JSON and print video download instructions
 python scripts/download_wlasl.py --subset WLASL100
@@ -59,9 +98,11 @@ python scripts/download_wlasl.py --subset WLASL100
 
 This creates `data/annotations/WLASL_v0.3.json` and the directory structure under `data/`. Follow the printed instructions to download the actual video files from the [official WLASL repo](https://github.com/dxli94/WLASL) or a community mirror, then place them in `data/raw/`.
 
+> **Note:** Many original WLASL URLs have expired. The Kaggle option (Option A) typically provides significantly more videos.
+
 #### Validate downloaded videos
 
-Many WLASL URLs have expired. When a URL is dead, servers often return an HTML redirect page (saved as `.mp4`) instead of a 404. Run the validator before preprocessing to remove these fake files:
+Many WLASL URLs have expired. When a URL is dead, servers often return an HTML redirect page (saved as `.mp4`) instead of a 404. This applies to both Kaggle and URL-based downloads. Run the validator before preprocessing to remove these fake files:
 
 ```bash
 # Report how many invalid files exist
@@ -76,9 +117,42 @@ python scripts/validate_videos.py --video-dir data/raw --delete --save-valid dat
 
 The validator checks the first 256 bytes of each file for HTML signatures (`<!DOCTYPE html>`, `<html>`, etc.) and reports counts of valid / HTML / empty files. The preprocessing pipeline also skips unreadable files automatically, but cleaning them up first saves processing time.
 
+#### End-to-end quick start with Kaggle
+
+If you want the fastest path from zero to training, run these commands in order:
+
+```bash
+# 1. Setup
+pip install -r requirements.txt
+
+# 2. Configure Kaggle API (one-time — see "One-time Kaggle API setup" above)
+
+# 3. Download all videos from Kaggle (~5 GB, ~12K videos)
+#    --subset only controls the annotation summary printed after download;
+#    the full archive is always downloaded regardless of the variant chosen.
+python scripts/download_kaggle.py --subset WLASL100
+
+# 4. Validate and clean up bad files
+python scripts/validate_videos.py --video-dir data/raw --delete
+
+# 5. Extract keypoints
+python -m src.data.preprocess --data-dir data --subset WLASL100 --mode keypoints
+
+# 6. Train
+python -m src.training.train --config configs/pose_transformer.yaml
+
+# 7. Evaluate
+python -m src.training.evaluate \
+    --config configs/pose_transformer.yaml \
+    --checkpoint checkpoints/best_model.pt \
+    --split val --output-dir eval_results
+```
+
 ---
 
 ### 3. Preprocess Data
+
+The preprocessing pipeline is **source-agnostic** — it reads mp4 files from `data/raw/` regardless of whether they were downloaded via Kaggle (Option A) or URL-based scripts (Option B). No extra flags or options are needed.
 
 Extract MediaPipe Holistic keypoints (543 landmarks per frame) from all valid videos:
 
@@ -108,6 +182,21 @@ WLASL100 ⊂ WLASL300 ⊂ WLASL1000 ⊂ WLASL2000 — each larger variant is a s
 
 - **`data/raw/`** and **`data/processed/`** are shared — keypoints are stored by `video_id` and reused across variants. Already-extracted `.npy` files are skipped automatically.
 - **`data/splits/WLASL{N}/`** is variant-specific — each variant gets its own `train/val/test.csv` files that never overwrite each other.
+
+**With Kaggle (recommended):** Since Kaggle downloads all ~12K videos at once, you already have all the data. Just preprocess each variant:
+
+```bash
+# Download once (all variants included)
+python scripts/download_kaggle.py --subset WLASL100
+
+# Preprocess WLASL100
+python -m src.data.preprocess --data-dir data --subset WLASL100
+
+# Scale up — only new videos are extracted; WLASL100 splits are untouched
+python -m src.data.preprocess --data-dir data --subset WLASL300
+```
+
+**With URL-based download:** Download annotations per variant, then add videos:
 
 ```bash
 # First variant
@@ -167,9 +256,9 @@ tensorboard --logdir logs/
 To train on a different variant, either edit `wlasl_variant` in an existing config or use a separate config file:
 
 ```bash
-# Copy and modify
+# Copy and modify — only change wlasl_variant (num_classes is auto-derived)
 cp configs/pose_transformer.yaml configs/pose_wlasl300.yaml
-# Edit wlasl_variant: 300 and num_classes: 300 in the new file
+# Edit wlasl_variant: 300 in the new file
 python -m src.training.train --config configs/pose_wlasl300.yaml
 ```
 
@@ -210,10 +299,24 @@ The demo runs three threads: a capture thread reads webcam frames continuously, 
 ### 7. Single Video Prediction
 
 ```bash
+# From a video file
 python -m src.inference.predict \
     --video path/to/video.mp4 \
     --config configs/pose_transformer.yaml \
     --checkpoint checkpoints/best_model.pt
+
+# From a pre-extracted keypoint .npy file
+python -m src.inference.predict \
+    --keypoints data/processed/12345.npy \
+    --config configs/pose_transformer.yaml \
+    --checkpoint checkpoints/best_model.pt
+
+# Specify device (auto, cpu, cuda, mps)
+python -m src.inference.predict \
+    --video path/to/video.mp4 \
+    --config configs/pose_transformer.yaml \
+    --checkpoint checkpoints/best_model.pt \
+    --device cpu
 ```
 
 Returns the predicted gloss, confidence score, and top-5 alternatives.
@@ -231,7 +334,34 @@ python -m src.inference.export_onnx \
     --benchmark
 ```
 
-`--verify` runs a forward pass through ONNX Runtime to confirm output shapes match. `--benchmark` measures average inference latency over 100 runs.
+`--verify` runs a forward pass through ONNX Runtime to confirm output shapes match. `--benchmark` measures average inference latency over 100 runs. Use `--opset N` to set the ONNX opset version (default: 17).
+
+---
+
+### 9. Run Tests
+
+```bash
+# Activate the virtual environment first
+source .venv/bin/activate   # Linux/macOS
+# .venv\Scripts\activate    # Windows
+
+# Run the full test suite (136 tests)
+python -m pytest
+
+# Run a specific test file
+python -m pytest tests/test_augment.py
+
+# Run with quiet output
+python -m pytest -q
+```
+
+Or without activating the venv:
+
+```bash
+.venv/bin/python -m pytest
+```
+
+Tests are fully isolated — they use pytest's `tmp_path` fixture for all file I/O and never touch project data, configs, or checkpoints. The `pyproject.toml` configures test discovery, verbose output, and warning suppression.
 
 ---
 
@@ -244,7 +374,7 @@ python -m src.inference.export_onnx \
 │   ├── video_classifier.yaml    # Approach B defaults
 │   └── fusion.yaml              # Approach C defaults
 ├── data/
-│   ├── raw/                     # Downloaded video files (all variants share this)
+│   ├── raw/                     # Downloaded video files — Kaggle or URL-based (shared)
 │   ├── processed/               # Extracted keypoints as .npy (shared across variants)
 │   ├── annotations/             # WLASL JSON annotation file
 │   └── splits/
@@ -253,30 +383,44 @@ python -m src.inference.export_onnx \
 │       └── ...                  # one subdirectory per variant
 ├── src/
 │   ├── data/
-│   │   ├── preprocess.py        # Download, parse, extract keypoints
+│   │   ├── preprocess.py        # Download, parse, extract & normalize keypoints
 │   │   ├── augment.py           # Temporal & spatial augmentations
-│   │   └── dataset.py           # PyTorch Dataset classes
+│   │   └── dataset.py           # PyTorch Dataset + motion feature computation
 │   ├── models/
 │   │   ├── pose_transformer.py  # Transformer & BiLSTM (Approach A)
 │   │   ├── video_i3d.py         # 3D CNN backbones (Approach B)
 │   │   └── fusion.py            # Multi-modal fusion (Approach C)
 │   ├── training/
 │   │   ├── config.py            # Config dataclass + YAML serialization
-│   │   ├── train.py             # Training loop
-│   │   └── evaluate.py          # Metrics & confusion matrix
+│   │   ├── train.py             # Training loop with mixup regularization
+│   │   └── evaluate.py          # Metrics, TTA, confusion matrix
 │   └── inference/
 │       ├── predict.py           # Single-video prediction
 │       ├── export_onnx.py       # ONNX export & latency benchmark
 │       └── live_demo.py         # Real-time webcam demo
+├── tests/
+│   ├── conftest.py              # Shared fixtures (tmp datasets, keypoint helpers)
+│   ├── test_augment.py          # Augmentation classes & pipeline presets
+│   ├── test_config.py           # Config defaults, load/save, YAML roundtrip
+│   ├── test_dataset.py          # Dataset, DataLoader, pad/crop, motion features
+│   ├── test_evaluate.py         # Metrics, TTA flip, hard negatives, latency
+│   ├── test_export_onnx.py      # ONNX export & verification
+│   ├── test_live_demo.py        # FrameBuffer, prediction smoothing
+│   ├── test_models.py           # PoseTransformer, PoseBiLSTM, FusionModel
+│   ├── test_predict.py          # SignPredictor inference paths
+│   ├── test_preprocess.py       # Normalization, annotation parsing, splits
+│   └── test_train.py            # Accuracy, mixup helpers
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_keypoint_visualization.ipynb
 │   └── 03_error_analysis.ipynb
 ├── scripts/
 │   ├── download_wlasl.py        # Download annotations, print video instructions
+│   ├── download_kaggle.py       # Download videos from Kaggle (fast alternative)
 │   └── validate_videos.py       # Detect and remove HTML-disguised video files
 ├── checkpoints/                 # Saved model weights
 ├── logs/                        # TensorBoard training logs
+├── pyproject.toml               # Pytest configuration
 └── requirements.txt
 ```
 
@@ -284,25 +428,89 @@ python -m src.inference.export_onnx \
 
 ## Configuration Guide
 
-All hyperparameters live in YAML files under `configs/`. Key settings:
+All hyperparameters live in YAML files under `configs/`. The table below shows **all** settings and their defaults from the `Config` dataclass (`src/training/config.py`). You only need to override values that differ from the defaults.
+
+**Paths:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `data_dir` | Root data directory | `data` |
+| `output_dir` | Output directory | `outputs` |
+| `checkpoint_dir` | Checkpoint save directory | `checkpoints` |
+| `log_dir` | Training log directory | `logs` |
+
+**Dataset:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `wlasl_variant` | Dataset size: `100`, `300`, `1000`, `2000` | `100` |
+| `num_classes` | Auto-derived from `wlasl_variant` — do not set manually | `100` |
+| `T` | Temporal sequence length in frames | `64` |
+| `image_size` | Spatial resolution for video models (Approach B/C) | `224` |
+| `num_workers` | DataLoader worker processes | `4` |
+
+**Model:**
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `approach` | `pose_transformer`, `pose_bilstm`, `video`, `fusion` | `pose_transformer` |
-| `wlasl_variant` | Dataset size: `100`, `300`, `1000`, `2000` | `100` |
-| `num_classes` | Auto-derived from `wlasl_variant` — do not set manually | `100` |
-| `T` | Temporal sequence length in frames | `64` |
-| `d_model` | Transformer embedding dimension | `256` |
+| `backbone` | Video backbone: `r2plus1d_18`, `r3d_18`, `mc3_18`, `slow_r50`, `slowfast_r50`, `x3d_m` | `r2plus1d_18` |
+| `pretrained` | Use pretrained backbone weights (Approach B/C) | `true` |
+| `d_model` | Transformer/LSTM embedding dimension | `256` |
 | `nhead` | Number of attention heads | `8` |
 | `num_layers` | Number of encoder layers | `4` |
-| `batch_size` | Training batch size | `16` |
-| `lr` | Learning rate | `5e-4` |
+| `dropout` | Dropout rate | `0.3` |
+| `use_motion` | Concatenate velocity (frame differences) with position features | `true` |
+| `fusion` | Fusion strategy: `concat` or `attention` (Approach C only) | `concat` |
+| `fusion_dim` | Fusion layer dimension (Approach C only) | `256` |
+
+**Training:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
 | `epochs` | Maximum training epochs | `100` |
+| `batch_size` | Training batch size | `32` |
+| `lr` | Learning rate | `1e-4` |
+| `weight_decay` | AdamW weight decay | `1e-4` |
+| `warmup_epochs` | Linear warmup epochs before scheduler takes over | `10` |
+| `label_smoothing` | Label smoothing factor (0 = disabled) | `0.1` |
+| `grad_clip` | Max gradient norm for clipping | `1.0` |
 | `fp16` | Mixed-precision (FP16) training | `true` |
-| `weighted_sampling` | Weighted sampler to counter class imbalance | `true` |
-| `scheduler` | LR scheduler: `onecycle` or `cosine` (warmup + cosine annealing) | `cosine` |
+| `weighted_sampling` | Weighted sampler to counter class imbalance | `false` |
+| `early_stopping_patience` | Epochs without val improvement before stopping | `20` |
+| `mixup_alpha` | Mixup interpolation parameter (0 = disabled) | `0.2` |
+| `scheduler` | LR scheduler: `onecycle` or `cosine` (warmup + cosine annealing) | `onecycle` |
+
+**Evaluation:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `use_tta` | Test-time augmentation via horizontal flip averaging | `false` |
+
+**Inference / Live Demo:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
 | `confidence_threshold` | Minimum confidence for live display | `0.6` |
 | `smoothing_window` | Number of inference windows to smooth predictions over | `5` |
+| `buffer_size` | Rolling frame buffer size for live demo | `64` |
+| `fps_display` | Show FPS counter on live demo overlay | `true` |
+
+**Logging:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `use_wandb` | Enable Weights & Biases logging | `false` |
+| `use_tensorboard` | Enable TensorBoard logging | `true` |
+| `wandb_project` | W&B project name | `wlasl-recognition` |
+| `wandb_run_name` | W&B run name (auto-generated if not set) | `null` |
+| `log_interval` | Steps between log entries | `10` |
+
+**Resume:**
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `resume_checkpoint` | Path to checkpoint for resuming training | `null` |
 
 `num_classes` is **always** auto-derived from `wlasl_variant` (100 → 100, 300 → 300, etc.). Any explicit `num_classes` in the YAML is silently overridden — do not set it manually.
 
@@ -312,11 +520,23 @@ All hyperparameters live in YAML files under `configs/`. Key settings:
 
 ### Approach A: Pose/Keypoint Transformer
 
-The recommended starting approach. MediaPipe Holistic extracts 543 landmarks per frame (33 pose + 21 left hand + 21 right hand + 468 face), normalized relative to the nose and shoulder width, then fed into a Transformer encoder or BiLSTM.
+The recommended starting approach. MediaPipe Holistic extracts 543 landmarks per frame (33 pose + 21 left hand + 21 right hand + 468 face), centered on the shoulder midpoint and scaled by shoulder width. When `use_motion: true` (default), frame-to-frame velocity is concatenated with position, producing 6 features per keypoint `(x, y, z, dx, dy, dz)`.
 
 **Advantages:** Lightweight, fast inference, background-invariant.
 
-**Pipeline:** Video → MediaPipe → Normalize → Temporal Crop/Augment → Transformer → Softmax
+**Pipeline:** Video → MediaPipe → Shoulder-Centered Normalization → Motion Features → Augment → Transformer → Softmax
+
+**Data augmentation pipeline** (training only):
+- Temporal speed perturbation (0.8x–1.2x)
+- Random temporal crop to T frames
+- Keypoint rotation (up to 15 degrees)
+- Keypoint translation (up to 0.1 shift)
+- Keypoint horizontal flip with landmark swapping
+- Keypoint dropout (frame-level and landmark-level)
+- Keypoint noise (sigma=0.02)
+- Random scaling (0.9x–1.1x)
+
+**Regularization:** Mixup interpolation (`mixup_alpha: 0.2`), label smoothing, dropout, and weighted sampling for class imbalance.
 
 ### Approach B: RGB Video Classifier
 
@@ -388,7 +608,7 @@ print(f'Classes with <=2 samples: {(counts<=2).sum()}')
 **If effective samples < 500:** Training will be very challenging. The default `configs/pose_transformer.yaml` is already tuned for this scenario (high dropout, weighted sampling, low LR). Expect 30–50% top-1 accuracy.
 
 **To get more data:**
-1. Search Kaggle for "WLASL" dataset mirrors.
+1. Use the Kaggle download script for the full ~12K video archive: `python scripts/download_kaggle.py`
 2. Re-run preprocessing after adding new videos — already-processed `.npy` files are skipped automatically.
 3. Try `--subset WLASL300` to include more glosses (you may have videos for classes outside WLASL100).
 
@@ -410,6 +630,7 @@ These are tuned starting points for each dataset variant. Copy the base config a
 approach: pose_transformer
 wlasl_variant: 100
 T: 64
+use_motion: true            # velocity features (position + frame differences)
 d_model: 256
 nhead: 8
 num_layers: 4
@@ -419,7 +640,8 @@ lr: 1.0e-3
 scheduler: onecycle
 warmup_epochs: 10
 label_smoothing: 0.1
-weighted_sampling: true   # important — classes are imbalanced
+mixup_alpha: 0.2            # mixup regularization
+weighted_sampling: true     # important — classes are imbalanced
 early_stopping_patience: 20
 epochs: 100
 ```
@@ -429,6 +651,7 @@ With very few training videos (<500 usable), increase regularization:
 ```yaml
 dropout: 0.4
 label_smoothing: 0.15
+mixup_alpha: 0.3
 batch_size: 16
 ```
 
@@ -548,11 +771,14 @@ WLASL's expired URLs mean you may only get 30–60% of the annotated videos. Whe
 4. **Use smaller batch sizes** (8–16) so the model sees more update steps per epoch.
 5. **Lower the learning rate** to 5e-4 or 3e-4 with cosine scheduler.
 6. **Try BiLSTM** (`approach: pose_bilstm`) — fewer parameters, less prone to overfitting on tiny datasets.
-7. **Check Kaggle mirrors** for community-uploaded WLASL video archives.
+7. **Download from Kaggle** (`python scripts/download_kaggle.py`) — the full ~12K video archive is available as a single download.
 
 ### Improving Accuracy
 
 - **Start with Approach A** (pose_transformer). It trains fastest and is easiest to debug.
+- **Enable motion features** (`use_motion: true`) — velocity information captures signing dynamics and typically adds 5–8% accuracy.
+- **Use mixup** (`mixup_alpha: 0.2`) — regularizes training by interpolating between random sample pairs.
+- **Enable TTA for evaluation** (`use_tta: true`) — averages predictions over original + horizontally flipped input for 2–4% evaluation boost.
 - **Use the error analysis notebook** (`notebooks/03_error_analysis.ipynb`) to find which classes are confused, then inspect those videos manually.
 - **Try the cosine scheduler** (`scheduler: cosine`) if onecycle doesn't converge well — cosine with warm-up is often more stable.
 - **Increase sequence length** (`T: 96` or `T: 128`) if signs in your dataset are long — some signs take 3+ seconds at 25 fps.

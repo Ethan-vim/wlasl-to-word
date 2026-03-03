@@ -24,6 +24,7 @@ data/processed/*
 data/splits/*
 data/annotations/*
 data/valid_ids.txt
+data/_kaggle_download/
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/splits/.gitkeep
@@ -34,11 +35,18 @@ checkpoints/*
 logs/*
 eval_results/
 outputs/
+*.log
 !checkpoints/.gitkeep
 !logs/.gitkeep
 
 # ONNX exports
 *.onnx
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Experiment tracking
+mlruns/
 
 # Cloned WLASL repo (not part of this project)
 WLASL/

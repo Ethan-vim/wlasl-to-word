@@ -90,21 +90,35 @@ def main() -> None:
   The WLASL video files are NOT distributed directly with the annotations.
   To obtain the videos, follow one of these approaches:
 
-  1. OFFICIAL REPOSITORY SCRIPTS
+  1. KAGGLE DOWNLOAD (Recommended — fastest)
+     The full archive (~12,000 videos, ~5 GB) is on Kaggle. This is the
+     fastest method and avoids expired URL issues.
+
+     a) One-time setup:
+          pip install kaggle
+          # Get your API token from https://www.kaggle.com/settings
+          mkdir -p ~/.kaggle
+          mv ~/Downloads/kaggle.json ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+     b) Download using our script:
+          python scripts/download_kaggle.py --data-dir {data_dir} --subset {subset}
+
+     Or use the Kaggle CLI directly:
+          kaggle datasets download -d risangbaskoro/wlasl-processed \\
+              -p {data_dir}/_kaggle_download --unzip
+          mv {data_dir}/_kaggle_download/videos/*.mp4 {raw_dir}/
+          rm -rf {data_dir}/_kaggle_download
+
+  2. OFFICIAL REPOSITORY SCRIPTS
      Clone the WLASL repo and use their download scripts:
        git clone https://github.com/dxli94/WLASL.git
        cd WLASL/start_kit
        python video_downloader.py
 
      Note: Many original URLs have expired. The download script handles
-     retries but some videos may be unavailable.
-
-  2. COMMUNITY MIRRORS
-     Several community members have archived the dataset. Search for
-     "WLASL dataset download" on Kaggle or academic dataset repositories.
-     Common mirrors:
-       - Kaggle datasets (search for "WLASL")
-       - Google Drive mirrors referenced in GitHub issues
+     retries but some videos may be unavailable. The Kaggle method
+     (option 1) typically provides significantly more videos.
 
   3. PARTIAL DATASET
      You can work with whatever subset of videos you can obtain.

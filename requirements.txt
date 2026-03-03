@@ -41,6 +41,7 @@ tqdm>=4.66.0,<4.68.0
 
 # Dataset Download
 gdown>=5.0.0,<5.3.0
+kaggle>=1.6.0,<1.8.0
 
 # Jupyter Notebooks
 jupyter>=1.0.0,<1.2.0
