@@ -2,6 +2,58 @@
 
 A real-time ASL word-level recognition system that captures live webcam video, processes hand/body movements frame-by-frame using MediaPipe, and predicts the signed word using deep learning models trained on the [WLASL dataset](https://github.com/dxli94/WLASL).
 
+## Table of Contents
+
+- **[Architecture](#architecture)** — Line 57
+- **[Quick Start](#quick-start)** — Line 89
+  - [1. Environment Setup](#1-environment-setup) — Line 91
+    - [Installing PyTorch with CUDA support](#installing-pytorch-with-cuda-support) — Line 129
+  - [2. Download the Dataset](#2-download-the-dataset) — Line 165
+    - [Option A: Kaggle (Recommended)](#option-a-kaggle-recommended--fastest) — Line 167
+    - [Option B: Official WLASL scripts](#option-b-official-wlasl-scripts-url-based) — Line 232
+    - [Validate downloaded videos](#validate-downloaded-videos) — Line 243
+    - [End-to-end quick start with Kaggle](#end-to-end-quick-start-with-kaggle) — Line 260
+    - [Choosing a wlasl_variant with Kaggle](#choosing-a-wlasl_variant-with-kaggle) — Line 301
+    - [Device-specific configuration after Kaggle download](#device-specific-configuration-after-kaggle-download) — Line 316
+  - [3. Preprocess Data](#3-preprocess-data) — Line 379
+    - [Working with multiple variants](#working-with-multiple-variants) — Line 405
+  - [4. Train a Model](#4-train-a-model) — Line 460
+  - [5. Evaluate](#5-evaluate) — Line 495
+  - [6. Run the Live Demo](#6-run-the-live-demo) — Line 521
+  - [7. Single Video Prediction](#7-single-video-prediction) — Line 551
+  - [8. Export to ONNX](#8-export-to-onnx) — Line 603
+  - [9. Run Tests](#9-run-tests) — Line 631
+- **[Project Structure](#project-structure)** — Line 674
+- **[Configuration Guide](#configuration-guide)** — Line 736
+- **[Approach Details](#approach-details)** — Line 837
+  - [Approach A: Pose/Keypoint Transformer](#approach-a-posekeypoint-transformer) — Line 839
+  - [Approach B: RGB Video Classifier](#approach-b-rgb-video-classifier) — Line 859
+  - [Approach C: Hybrid Fusion](#approach-c-hybrid-fusion) — Line 867
+- **[Troubleshooting](#troubleshooting)** — Line 875
+  - [HTML files masquerading as videos](#html-files-masquerading-as-videos) — Line 877
+  - [MediaPipe installation issues](#mediapipe-installation-issues) — Line 880
+  - [CUDA out of memory](#cuda-out-of-memory) — Line 886
+  - [Webcam not detected](#webcam-not-detected) — Line 892
+  - [Low accuracy](#low-accuracy) — Line 898
+  - [Diagnosing partial data](#diagnosing-partial-data-most-common-issue) — Line 903
+  - [wlasl_variant / num_classes mismatch](#wlasl_variant--num_classes-mismatch) — Line 950
+- **[Recommended Configurations](#recommended-configurations)** — Line 956
+  - [WLASL100 (recommended starting point)](#wlasl100-recommended-starting-point) — Line 960
+  - [WLASL300](#wlasl300) — Line 993
+  - [WLASL1000 / WLASL2000](#wlasl1000--wlasl2000) — Line 1015
+  - [Video Classifier (Approach B)](#video-classifier-approach-b) — Line 1039
+  - [Fusion (Approach C)](#fusion-approach-c) — Line 1055
+- **[Tips & Best Practices](#tips--best-practices)** — Line 1074
+  - [Hardware-Specific Setup](#hardware-specific-setup) — Line 1076
+  - [Training with Limited Data](#training-with-limited-data) — Line 1099
+  - [Improving Accuracy](#improving-accuracy) — Line 1111
+  - [What to Expect](#what-to-expect) — Line 1122
+  - [Common Pitfalls](#common-pitfalls) — Line 1134
+- **[Citation](#citation)** — Line 1145
+- **[License](#license)** — Line 1157
+
+---
+
 ## Architecture
 
 ```
@@ -38,16 +90,75 @@ Feed        Buffer  |  Keypoints    (T, 543*6)     |    Gloss +
 
 ### 1. Environment Setup
 
+**Linux/macOS:**
+
 ```bash
 git clone <this-repo-url>
 cd "Live American Sign Language Recognition using WLASL"
 
 python -m venv .venv
-source .venv/bin/activate   # Linux/macOS
-# .venv\Scripts\activate    # Windows
+source .venv/bin/activate
 
 pip install -r requirements.txt
 ```
+
+**Windows (PowerShell):**
+
+```powershell
+git clone <this-repo-url>
+cd "Live American Sign Language Recognition using WLASL"
+
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+
+pip install -r requirements.txt
+```
+
+**Windows (Command Prompt):**
+
+```cmd
+git clone <this-repo-url>
+cd "Live American Sign Language Recognition using WLASL"
+
+python -m venv .venv
+.venv\Scripts\activate.bat
+
+pip install -r requirements.txt
+```
+
+#### Installing PyTorch with CUDA support
+
+The default `pip install -r requirements.txt` installs the CPU-only version of PyTorch. If you have an NVIDIA GPU, install the CUDA-enabled version **before** running `pip install -r requirements.txt` (or after, to overwrite the CPU version):
+
+```bash
+# CUDA 12.4 (recommended for modern GPUs — RTX 30xx/40xx/50xx)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# CUDA 12.1
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
+# CUDA 11.8 (for older GPUs or driver versions)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# CPU only (default — no flag needed, but explicit if you want to be sure)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+```
+
+To check which CUDA version your driver supports:
+
+```bash
+nvidia-smi    # look for "CUDA Version" in the top-right corner
+```
+
+After installing, verify CUDA is available:
+
+```bash
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}, version: {torch.version.cuda}')"
+```
+
+These commands work identically on Linux, macOS, and Windows.
+
+> **Windows note:** All `python` commands in this README work on both platforms. When you see `\` at the end of a line (bash line continuation), replace it with `` ` `` (backtick) in PowerShell or `^` in Command Prompt. Platform-specific shell commands (file operations, venv activation) show both variants where they differ.
 
 ---
 
@@ -58,6 +169,8 @@ pip install -r requirements.txt
 The full WLASL video archive (~12,000 videos, ~5 GB) is available on [Kaggle](https://www.kaggle.com/datasets/risangbaskoro/wlasl-processed). This is the fastest way to get the data since it downloads as a single archive.
 
 **One-time Kaggle API setup:**
+
+**Linux/macOS:**
 
 ```bash
 # kaggle is already included in requirements.txt, so if you ran
@@ -71,6 +184,23 @@ mv ~/Downloads/kaggle.json ~/.kaggle/kaggle.json
 chmod 600 ~/.kaggle/kaggle.json
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+# Get your API token from https://www.kaggle.com/settings → "Create New Token"
+# Move the downloaded kaggle.json to %USERPROFILE%\.kaggle\
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.kaggle"
+Move-Item "$env:USERPROFILE\Downloads\kaggle.json" "$env:USERPROFILE\.kaggle\kaggle.json"
+# No chmod needed on Windows
+```
+
+**Windows (Command Prompt):**
+
+```cmd
+mkdir "%USERPROFILE%\.kaggle"
+move "%USERPROFILE%\Downloads\kaggle.json" "%USERPROFILE%\.kaggle\kaggle.json"
+```
+
 **Download:**
 
 ```bash
@@ -81,10 +211,20 @@ This downloads **all** ~12K videos to `data/raw/` (the full archive, regardless 
 
 You can also use the Kaggle CLI directly:
 
+**Linux/macOS:**
+
 ```bash
 kaggle datasets download -d risangbaskoro/wlasl-processed -p data/_kaggle_download --unzip
 mv data/_kaggle_download/videos/*.mp4 data/raw/
 rm -rf data/_kaggle_download
+```
+
+**Windows (PowerShell):**
+
+```powershell
+kaggle datasets download -d risangbaskoro/wlasl-processed -p data\_kaggle_download --unzip
+Move-Item data\_kaggle_download\videos\*.mp4 data\raw\
+Remove-Item -Recurse -Force data\_kaggle_download
 ```
 
 > **Note:** The Kaggle archive contains all ~12K videos for all WLASL variants (100–2000). You only download once — the preprocessing step (Step 3) filters to your chosen subset.
@@ -119,7 +259,7 @@ The validator checks the first 256 bytes of each file for HTML signatures (`<!DO
 
 #### End-to-end quick start with Kaggle
 
-If you want the fastest path from zero to training, run these commands in order:
+If you want the fastest path from zero to training, run these commands in order (all `python` commands are cross-platform):
 
 ```bash
 # 1. Setup
@@ -138,15 +278,101 @@ python scripts/validate_videos.py --video-dir data/raw --delete
 # 5. Extract keypoints
 python -m src.data.preprocess --data-dir data --subset WLASL100 --mode keypoints
 
-# 6. Train
+# 6. Train (see device-specific configs below)
 python -m src.training.train --config configs/pose_transformer.yaml
 
 # 7. Evaluate
+#    Linux/macOS uses \ for line continuation; Windows PowerShell uses `
 python -m src.training.evaluate \
     --config configs/pose_transformer.yaml \
     --checkpoint checkpoints/best_model.pt \
     --split val --output-dir eval_results
 ```
+
+On Windows PowerShell, the evaluate command (step 7) becomes:
+
+```powershell
+python -m src.training.evaluate `
+    --config configs/pose_transformer.yaml `
+    --checkpoint checkpoints/best_model.pt `
+    --split val --output-dir eval_results
+```
+
+#### Choosing a `wlasl_variant` with Kaggle
+
+The Kaggle archive contains all ~12K videos covering every WLASL variant. After downloading, you choose which variant to train on by setting `wlasl_variant` in your YAML config (and matching the `--subset` flag during preprocessing). The variant controls the number of sign classes — `num_classes` is auto-derived, so you never set it manually.
+
+| Variant | Classes | Approx. Training Samples | Difficulty | Recommended For |
+|---------|---------|--------------------------|------------|-----------------|
+| `wlasl_variant: 100` | 100 | 800–1,200 | Easiest | First-time setup, prototyping, CPU training |
+| `wlasl_variant: 300` | 300 | 2,000–3,500 | Moderate | Better vocabulary coverage with a GPU |
+| `wlasl_variant: 1000` | 1,000 | 5,000–8,000 | Hard | Research, large-GPU setups |
+| `wlasl_variant: 2000` | 2,000 | 8,000–12,000 | Hardest | Full dataset, consider fusion (Approach C) |
+
+**Start with `wlasl_variant: 100`** — it has the most samples per class, trains fastest, and gives the highest per-class accuracy. Scale up once your pipeline is working.
+
+Larger variants need more model capacity. See the [Recommended Configurations](#recommended-configurations) section for variant-specific hyperparameters (deeper layers, wider `d_model`, adjusted LR/dropout).
+
+#### Device-specific configuration after Kaggle download
+
+After downloading the Kaggle dataset, adjust `configs/pose_transformer.yaml` for your hardware before training (step 6). Set `wlasl_variant` to match the subset you preprocessed in step 5.
+
+**CPU-only (no GPU):**
+
+```yaml
+approach: pose_transformer
+wlasl_variant: 100          # match your preprocessed subset (100, 300, 1000, or 2000)
+fp16: false                  # FP16 only works on CUDA
+batch_size: 8                # smaller batches to avoid memory pressure
+num_workers: 2
+T: 64
+d_model: 256
+dropout: 0.3
+lr: 1.0e-4
+scheduler: onecycle
+weighted_sampling: true
+epochs: 100
+```
+
+Use `--device cpu` for inference and live demo. Stick to Approach A (pose_transformer) — video models are too slow on CPU for training.
+
+**GPU / CUDA:**
+
+```yaml
+approach: pose_transformer
+wlasl_variant: 100          # match your preprocessed subset (100, 300, 1000, or 2000)
+fp16: true                   # faster training, lower memory
+batch_size: 32               # increase to 64 for large GPUs
+num_workers: 4
+T: 64
+d_model: 256
+dropout: 0.3
+lr: 1.0e-4
+scheduler: onecycle
+weighted_sampling: true
+epochs: 100
+```
+
+Monitor GPU memory with `nvidia-smi`. If you run out of memory, reduce `batch_size` first, then `T`.
+
+**Apple Silicon (M1/M2/M3/M4):**
+
+```yaml
+approach: pose_transformer
+wlasl_variant: 100          # match your preprocessed subset (100, 300, 1000, or 2000)
+fp16: false                  # MPS does not support FP16 reliably
+batch_size: 16
+num_workers: 2
+T: 64
+d_model: 256
+dropout: 0.3
+lr: 1.0e-4
+scheduler: onecycle
+weighted_sampling: true
+epochs: 100
+```
+
+Use `--device cpu` for the live demo to avoid MPS overhead. Install MediaPipe with `pip install mediapipe-silicon` if the standard package fails.
 
 ---
 
@@ -257,7 +483,9 @@ To train on a different variant, either edit `wlasl_variant` in an existing conf
 
 ```bash
 # Copy and modify — only change wlasl_variant (num_classes is auto-derived)
-cp configs/pose_transformer.yaml configs/pose_wlasl300.yaml
+cp configs/pose_transformer.yaml configs/pose_wlasl300.yaml          # Linux/macOS
+# copy configs\pose_transformer.yaml configs\pose_wlasl300.yaml      # Windows
+
 # Edit wlasl_variant: 300 in the new file
 python -m src.training.train --config configs/pose_wlasl300.yaml
 ```
@@ -265,6 +493,8 @@ python -m src.training.train --config configs/pose_wlasl300.yaml
 ---
 
 ### 5. Evaluate
+
+**Linux/macOS:**
 
 ```bash
 python -m src.training.evaluate \
@@ -274,17 +504,39 @@ python -m src.training.evaluate \
     --output-dir eval_results
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+python -m src.training.evaluate `
+    --config configs/pose_transformer.yaml `
+    --checkpoint checkpoints/best_model.pt `
+    --split val `
+    --output-dir eval_results
+```
+
 This prints top-1/top-5 accuracy, per-class breakdown, and saves a confusion matrix heatmap to `eval_results/`.
 
 ---
 
 ### 6. Run the Live Demo
 
+**Linux/macOS:**
+
 ```bash
 python -m src.inference.live_demo \
     --config configs/pose_transformer.yaml \
     --checkpoint checkpoints/best_model.pt \
     --camera 0 \
+    --device cpu
+```
+
+**Windows (PowerShell):**
+
+```powershell
+python -m src.inference.live_demo `
+    --config configs/pose_transformer.yaml `
+    --checkpoint checkpoints/best_model.pt `
+    --camera 0 `
     --device cpu
 ```
 
@@ -297,6 +549,8 @@ The demo runs three threads: a capture thread reads webcam frames continuously, 
 ---
 
 ### 7. Single Video Prediction
+
+**Linux/macOS:**
 
 ```bash
 # From a video file
@@ -319,11 +573,36 @@ python -m src.inference.predict \
     --device cpu
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+# From a video file
+python -m src.inference.predict `
+    --video path\to\video.mp4 `
+    --config configs\pose_transformer.yaml `
+    --checkpoint checkpoints\best_model.pt
+
+# From a pre-extracted keypoint .npy file
+python -m src.inference.predict `
+    --keypoints data\processed\12345.npy `
+    --config configs\pose_transformer.yaml `
+    --checkpoint checkpoints\best_model.pt
+
+# Specify device (auto, cpu, cuda, mps)
+python -m src.inference.predict `
+    --video path\to\video.mp4 `
+    --config configs\pose_transformer.yaml `
+    --checkpoint checkpoints\best_model.pt `
+    --device cpu
+```
+
 Returns the predicted gloss, confidence score, and top-5 alternatives.
 
 ---
 
 ### 8. Export to ONNX
+
+**Linux/macOS:**
 
 ```bash
 python -m src.inference.export_onnx \
@@ -334,31 +613,58 @@ python -m src.inference.export_onnx \
     --benchmark
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+python -m src.inference.export_onnx `
+    --config configs/pose_transformer.yaml `
+    --checkpoint checkpoints/best_model.pt `
+    --output model.onnx `
+    --verify `
+    --benchmark
+```
+
 `--verify` runs a forward pass through ONNX Runtime to confirm output shapes match. `--benchmark` measures average inference latency over 100 runs. Use `--opset N` to set the ONNX opset version (default: 17).
 
 ---
 
 ### 9. Run Tests
 
+**Linux/macOS:**
+
 ```bash
-# Activate the virtual environment first
-source .venv/bin/activate   # Linux/macOS
-# .venv\Scripts\activate    # Windows
-
-# Run the full test suite (136 tests)
-python -m pytest
-
-# Run a specific test file
-python -m pytest tests/test_augment.py
-
-# Run with quiet output
-python -m pytest -q
+source .venv/bin/activate
+python -m pytest                          # full test suite (136 tests)
+python -m pytest tests/test_augment.py    # specific test file
+python -m pytest -q                       # quiet output
 ```
 
 Or without activating the venv:
 
 ```bash
 .venv/bin/python -m pytest
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.venv\Scripts\Activate.ps1
+python -m pytest                          # full test suite (136 tests)
+python -m pytest tests\test_augment.py    # specific test file
+python -m pytest -q                       # quiet output
+```
+
+Or without activating the venv:
+
+```powershell
+.venv\Scripts\python -m pytest
+```
+
+**Windows (Command Prompt):**
+
+```cmd
+.venv\Scripts\activate.bat
+python -m pytest
 ```
 
 Tests are fully isolated — they use pytest's `tmp_path` fixture for all file I/O and never touch project data, configs, or checkpoints. The `pyproject.toml` configures test discovery, verbose output, and warning suppression.
@@ -417,7 +723,8 @@ Tests are fully isolated — they use pytest's `tmp_path` fixture for all file I
 ├── scripts/
 │   ├── download_wlasl.py        # Download annotations, print video instructions
 │   ├── download_kaggle.py       # Download videos from Kaggle (fast alternative)
-│   └── validate_videos.py       # Detect and remove HTML-disguised video files
+│   ├── validate_videos.py       # Detect and remove HTML-disguised video files
+│   └── reset_configs.py         # Reset all configs/ to README.md recommended defaults
 ├── checkpoints/                 # Saved model weights
 ├── logs/                        # TensorBoard training logs
 ├── pyproject.toml               # Pytest configuration
@@ -429,6 +736,16 @@ Tests are fully isolated — they use pytest's `tmp_path` fixture for all file I
 ## Configuration Guide
 
 All hyperparameters live in YAML files under `configs/`. The table below shows **all** settings and their defaults from the `Config` dataclass (`src/training/config.py`). You only need to override values that differ from the defaults.
+
+To reset all config files back to the recommended defaults:
+
+```bash
+python scripts/reset_configs.py                # reset all three configs
+python scripts/reset_configs.py --only pose    # reset only pose_transformer.yaml
+python scripts/reset_configs.py --only video   # reset only video_classifier.yaml
+python scripts/reset_configs.py --only fusion  # reset only fusion.yaml
+python scripts/reset_configs.py --dry-run      # preview without writing
+```
 
 **Paths:**
 
@@ -456,6 +773,7 @@ All hyperparameters live in YAML files under `configs/`. The table below shows *
 | `approach` | `pose_transformer`, `pose_bilstm`, `video`, `fusion` | `pose_transformer` |
 | `backbone` | Video backbone: `r2plus1d_18`, `r3d_18`, `mc3_18`, `slow_r50`, `slowfast_r50`, `x3d_m` | `r2plus1d_18` |
 | `pretrained` | Use pretrained backbone weights (Approach B/C) | `true` |
+| `num_keypoints` | Number of MediaPipe landmarks per frame (33 pose + 21 left hand + 21 right hand + 468 face) | `543` |
 | `d_model` | Transformer/LSTM embedding dimension | `256` |
 | `nhead` | Number of attention heads | `8` |
 | `num_layers` | Number of encoder layers | `4` |
@@ -575,6 +893,7 @@ Expired WLASL URLs often return an HTML lander page (saved as `.mp4`) rather tha
 - Try `--camera 1` or `--camera 2`.
 - Linux: check `ls -la /dev/video*`.
 - macOS: grant camera access in System Settings → Privacy & Security → Camera.
+- Windows: check Device Manager → Cameras. Grant camera access in Settings → Privacy & security → Camera.
 
 ### Low accuracy
 - Check split CSV row counts to ensure enough training videos were downloaded.
@@ -585,13 +904,29 @@ Expired WLASL URLs often return an HTML lander page (saved as `.mp4`) rather tha
 
 Many WLASL URLs have expired, so you will likely end up with far fewer usable videos than the annotation file lists. This is the single biggest factor in accuracy. Check your effective dataset size:
 
+**Linux/macOS:**
+
 ```bash
 # Row counts in split CSVs (includes videos you may not have)
 wc -l data/splits/WLASL100/*.csv
 
 # How many .npy keypoint files were actually produced
 ls data/processed/*.npy | wc -l
+```
 
+**Windows (PowerShell):**
+
+```powershell
+# Row counts in split CSVs
+Get-ChildItem data\splits\WLASL100\*.csv | ForEach-Object { Write-Host "$($_.Name): $((Get-Content $_).Count) lines" }
+
+# How many .npy keypoint files were actually produced
+(Get-ChildItem data\processed\*.npy).Count
+```
+
+**Cross-platform (Python):**
+
+```bash
 # Effective training samples (rows in CSV that have matching .npy files)
 python -c "
 import pandas as pd; from pathlib import Path
@@ -801,8 +1136,8 @@ If your val loss is around `ln(num_classes)` (e.g., 4.6 for 100 classes), the mo
 1. **HTML videos**: Run `scripts/validate_videos.py --delete` before preprocessing. Expired WLASL URLs return HTML pages saved as `.mp4` files.
 2. **Corrupt videos**: Some downloads are truncated (OpenCV reports "moov atom not found"). The preprocessing pipeline skips these automatically, but they inflate your file count.
 3. **Wrong video count**: The official WLASL download scripts fetch ALL ~21,000 videos (all 2,000 glosses), not just your target variant. The preprocessing pipeline filters to the correct subset.
-4. **MediaPipe warnings**: `inference_feedback_manager.cc` warnings are harmless TFLite logs. Suppress with `GLOG_minloglevel=2 python ...` if they clutter your output.
-5. **Empty val set**: If the val split CSV has very few rows, some classes may have zero val samples. This makes early stopping and accuracy metrics unreliable — check `wc -l data/splits/WLASL100/*.csv` after preprocessing.
+4. **MediaPipe warnings**: `inference_feedback_manager.cc` warnings are harmless TFLite logs. Suppress with `GLOG_minloglevel=2 python ...` (Linux/macOS) or `$env:GLOG_minloglevel=2; python ...` (Windows PowerShell) or `set GLOG_minloglevel=2 && python ...` (Windows cmd).
+5. **Empty val set**: If the val split CSV has very few rows, some classes may have zero val samples. This makes early stopping and accuracy metrics unreliable — check row counts after preprocessing: `wc -l data/splits/WLASL100/*.csv` (Linux/macOS) or `Get-ChildItem data\splits\WLASL100\*.csv | ForEach-Object { Write-Host "$($_.Name): $((Get-Content $_).Count)" }` (Windows PowerShell).
 6. **OneCycleLR NaN loss**: If you resume training from a checkpoint with a different total step count, the scheduler can go out of range. Start fresh or use `scheduler: cosine` for resumed runs.
 
 ---

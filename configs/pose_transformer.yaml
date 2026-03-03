@@ -1,6 +1,6 @@
 ## Approach A: Pose/Keypoint Transformer
-## This is the recommended starting configuration.
-## Tuned for low-data scenarios (300-800 effective training samples).
+## Recommended starting configuration (WLASL100).
+## Values from README.md "Recommended Configurations" section.
 
 approach: pose_transformer
 wlasl_variant: 100
@@ -17,23 +17,23 @@ use_motion: true  # Concatenate velocity (frame differences) with position
 d_model: 256
 nhead: 8
 num_layers: 4
-dropout: 0.4
+dropout: 0.3
 
-# Training — tuned for small datasets (~300-800 usable samples)
+# Training
 epochs: 100
-batch_size: 16
-lr: 5.0e-4
+batch_size: 32
+lr: 1.0e-3
 weight_decay: 1.0e-4
 warmup_epochs: 10
-label_smoothing: 0.15
+label_smoothing: 0.1
 grad_clip: 1.0
 fp16: true
-weighted_sampling: true
-early_stopping_patience: 25
+weighted_sampling: true  # important — classes are imbalanced
+early_stopping_patience: 20
 mixup_alpha: 0.2  # Mixup regularization (0 = disabled)
 
 # Scheduler
-scheduler: cosine
+scheduler: onecycle
 
 # Evaluation
 use_tta: false  # Test-time augmentation (horizontal flip averaging)

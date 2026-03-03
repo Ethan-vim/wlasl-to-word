@@ -50,13 +50,16 @@ def _check_kaggle_available() -> bool:
             "  pip install kaggle"
         )
         return False
-    except OSError as e:
-        # kaggle raises OSError if credentials are missing
+    except (OSError, ValueError) as e:
+        # kaggle raises OSError if credentials file is missing,
+        # ValueError if credentials file exists but is malformed
+        # (e.g. missing username/key fields)
         logger.error(
-            "Kaggle API credentials not found. Set up credentials:\n"
+            "Kaggle API credentials not found or invalid. Set up credentials:\n"
             "  1. Go to https://www.kaggle.com/settings → Create New Token\n"
             "  2. Move the downloaded kaggle.json to ~/.kaggle/kaggle.json\n"
-            "  3. Run: chmod 600 ~/.kaggle/kaggle.json\n\n"
+            "  3. Run: chmod 600 ~/.kaggle/kaggle.json\n"
+            "  The file should contain: {\"username\":\"YOUR_USER\",\"key\":\"YOUR_KEY\"}\n\n"
             "  Original error: %s",
             e,
         )

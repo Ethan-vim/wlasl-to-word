@@ -1,8 +1,9 @@
 ## Approach C: Hybrid Fusion (Pose + Video)
 ## Combines Approach A and B for best accuracy.
+## Values from README.md "Recommended Configurations" section.
 
 approach: fusion
-fusion: concat
+fusion: concat             # start with concat, try attention if concat plateaus
 fusion_dim: 256
 
 # Sub-model configs
@@ -24,7 +25,7 @@ dropout: 0.3
 
 # Training
 epochs: 100
-batch_size: 16
+batch_size: 8
 lr: 1.0e-4
 weight_decay: 1.0e-4
 warmup_epochs: 10
@@ -32,7 +33,7 @@ label_smoothing: 0.1
 grad_clip: 1.0
 fp16: true
 weighted_sampling: false
-early_stopping_patience: 25
+early_stopping_patience: 20
 
 # Scheduler
 scheduler: onecycle
