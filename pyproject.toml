@@ -8,6 +8,7 @@ addopts = [
     "--tb=short",
     "--strict-markers",
     "--color=yes",
+    "-r fE",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning:google",

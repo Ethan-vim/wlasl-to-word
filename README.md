@@ -4,53 +4,57 @@ A real-time ASL word-level recognition system that captures live webcam video, p
 
 ## Table of Contents
 
-- **[Architecture](#architecture)** — Line 57
-- **[Quick Start](#quick-start)** — Line 89
-  - [1. Environment Setup](#1-environment-setup) — Line 91
-    - [Installing PyTorch with CUDA support](#installing-pytorch-with-cuda-support) — Line 129
-  - [2. Download the Dataset](#2-download-the-dataset) — Line 165
-    - [Option A: Kaggle (Recommended)](#option-a-kaggle-recommended--fastest) — Line 167
-    - [Option B: Official WLASL scripts](#option-b-official-wlasl-scripts-url-based) — Line 232
-    - [Validate downloaded videos](#validate-downloaded-videos) — Line 243
-    - [End-to-end quick start with Kaggle](#end-to-end-quick-start-with-kaggle) — Line 260
-    - [Choosing a wlasl_variant with Kaggle](#choosing-a-wlasl_variant-with-kaggle) — Line 301
-    - [Device-specific configuration after Kaggle download](#device-specific-configuration-after-kaggle-download) — Line 316
-  - [3. Preprocess Data](#3-preprocess-data) — Line 379
-    - [Working with multiple variants](#working-with-multiple-variants) — Line 405
-  - [4. Train a Model](#4-train-a-model) — Line 460
-  - [5. Evaluate](#5-evaluate) — Line 495
-  - [6. Run the Live Demo](#6-run-the-live-demo) — Line 521
-  - [7. Single Video Prediction](#7-single-video-prediction) — Line 551
-  - [8. Export to ONNX](#8-export-to-onnx) — Line 603
-  - [9. Run Tests](#9-run-tests) — Line 631
-- **[Project Structure](#project-structure)** — Line 674
-- **[Configuration Guide](#configuration-guide)** — Line 736
-- **[Approach Details](#approach-details)** — Line 837
-  - [Approach A: Pose/Keypoint Transformer](#approach-a-posekeypoint-transformer) — Line 839
-  - [Approach B: RGB Video Classifier](#approach-b-rgb-video-classifier) — Line 859
-  - [Approach C: Hybrid Fusion](#approach-c-hybrid-fusion) — Line 867
-- **[Troubleshooting](#troubleshooting)** — Line 875
-  - [HTML files masquerading as videos](#html-files-masquerading-as-videos) — Line 877
-  - [MediaPipe installation issues](#mediapipe-installation-issues) — Line 880
-  - [CUDA out of memory](#cuda-out-of-memory) — Line 886
-  - [Webcam not detected](#webcam-not-detected) — Line 892
-  - [Low accuracy](#low-accuracy) — Line 898
-  - [Diagnosing partial data](#diagnosing-partial-data-most-common-issue) — Line 903
-  - [wlasl_variant / num_classes mismatch](#wlasl_variant--num_classes-mismatch) — Line 950
-- **[Recommended Configurations](#recommended-configurations)** — Line 956
-  - [WLASL100 (recommended starting point)](#wlasl100-recommended-starting-point) — Line 960
-  - [WLASL300](#wlasl300) — Line 993
-  - [WLASL1000 / WLASL2000](#wlasl1000--wlasl2000) — Line 1015
-  - [Video Classifier (Approach B)](#video-classifier-approach-b) — Line 1039
-  - [Fusion (Approach C)](#fusion-approach-c) — Line 1055
-- **[Tips & Best Practices](#tips--best-practices)** — Line 1074
-  - [Hardware-Specific Setup](#hardware-specific-setup) — Line 1076
-  - [Training with Limited Data](#training-with-limited-data) — Line 1099
-  - [Improving Accuracy](#improving-accuracy) — Line 1111
-  - [What to Expect](#what-to-expect) — Line 1122
-  - [Common Pitfalls](#common-pitfalls) — Line 1134
-- **[Citation](#citation)** — Line 1145
-- **[License](#license)** — Line 1157
+- **[Architecture](#architecture)** — Line 61
+- **[Quick Start](#quick-start)** — Line 93
+  - [1. Environment Setup](#1-environment-setup) — Line 95
+    - [Installing PyTorch with CUDA support](#installing-pytorch-with-cuda-support) — Line 133
+  - [2. Download the Dataset](#2-download-the-dataset) — Line 169
+    - [Option A: Kaggle (Recommended)](#option-a-kaggle-recommended--fastest) — Line 171
+    - [Option B: Official WLASL scripts](#option-b-official-wlasl-scripts-url-based) — Line 236
+    - [Validate downloaded videos](#validate-downloaded-videos) — Line 247
+    - [End-to-end quick start with Kaggle](#end-to-end-quick-start-with-kaggle) — Line 264
+    - [Choosing a wlasl_variant with Kaggle](#choosing-a-wlasl_variant-with-kaggle) — Line 305
+    - [Device-specific configuration after Kaggle download](#device-specific-configuration-after-kaggle-download) — Line 320
+  - [3. Preprocess Data](#3-preprocess-data) — Line 383
+    - [Working with multiple variants](#working-with-multiple-variants) — Line 409
+  - [4. Train a Model](#4-train-a-model) — Line 464
+  - [5. Evaluate](#5-evaluate) — Line 499
+  - [6. Run the Live Demo](#6-run-the-live-demo) — Line 525
+  - [7. Single Video Prediction](#7-single-video-prediction) — Line 555
+  - [8. Export to ONNX](#8-export-to-onnx) — Line 607
+  - [9. Run Tests](#9-run-tests) — Line 635
+- **[Project Structure](#project-structure)** — Line 678
+- **[Configuration Guide](#configuration-guide)** — Line 743
+- **[Approach Details](#approach-details)** — Line 844
+  - [Approach A: Pose/Keypoint Transformer](#approach-a-posekeypoint-transformer) — Line 846
+  - [Approach B: RGB Video Classifier](#approach-b-rgb-video-classifier) — Line 866
+  - [Approach C: Hybrid Fusion](#approach-c-hybrid-fusion) — Line 874
+- **[Troubleshooting](#troubleshooting)** — Line 882
+  - [HTML files masquerading as videos](#html-files-masquerading-as-videos) — Line 884
+  - [MediaPipe installation issues](#mediapipe-installation-issues) — Line 887
+  - [CUDA out of memory](#cuda-out-of-memory) — Line 893
+  - [Webcam not detected](#webcam-not-detected) — Line 899
+  - [Low accuracy](#low-accuracy) — Line 905
+  - [Diagnosing partial data](#diagnosing-partial-data-most-common-issue) — Line 910
+  - [wlasl_variant / num_classes mismatch](#wlasl_variant--num_classes-mismatch) — Line 957
+- **[Recommended Configurations](#recommended-configurations)** — Line 963
+  - [WLASL100 (recommended starting point)](#wlasl100-recommended-starting-point) — Line 967
+  - [WLASL300](#wlasl300) — Line 1000
+  - [WLASL1000 / WLASL2000](#wlasl1000--wlasl2000) — Line 1022
+  - [Video Classifier (Approach B)](#video-classifier-approach-b) — Line 1046
+  - [Fusion (Approach C)](#fusion-approach-c) — Line 1062
+- **[Tips & Best Practices](#tips--best-practices)** — Line 1081
+  - [Hardware-Specific Setup](#hardware-specific-setup) — Line 1083
+  - [Training with Limited Data](#training-with-limited-data) — Line 1106
+  - [Improving Accuracy](#improving-accuracy) — Line 1118
+  - [What to Expect](#what-to-expect) — Line 1129
+  - [Common Pitfalls](#common-pitfalls) — Line 1141
+- **[Recommended Library & CUDA Versions](#recommended-library--cuda-versions)** — Line 1152
+  - [PyTorch ↔ CUDA Compatibility](#pytorch--cuda-compatibility) — Line 1156
+  - [MediaPipe](#mediapipe) — Line 1175
+  - [Other Key Libraries](#other-key-libraries) — Line 1187
+- **[Citation](#citation)** — Line 1204
+- **[License](#license)** — Line 1216
 
 ---
 
@@ -728,8 +732,11 @@ Tests are fully isolated — they use pytest's `tmp_path` fixture for all file I
 ├── checkpoints/                 # Saved model weights
 ├── logs/                        # TensorBoard training logs
 ├── pyproject.toml               # Pytest configuration
-└── requirements.txt
+├── requirements.txt
+└── STRUCTURE.md                 # Full workflow & dependency graph (which file calls which)
 ```
+
+For a detailed breakdown of the entire pipeline — data flow diagrams, file dependency graphs, model architecture flow, and all CLI entry points — see [`STRUCTURE.md`](STRUCTURE.md).
 
 ---
 
@@ -1139,6 +1146,58 @@ If your val loss is around `ln(num_classes)` (e.g., 4.6 for 100 classes), the mo
 4. **MediaPipe warnings**: `inference_feedback_manager.cc` warnings are harmless TFLite logs. Suppress with `GLOG_minloglevel=2 python ...` (Linux/macOS) or `$env:GLOG_minloglevel=2; python ...` (Windows PowerShell) or `set GLOG_minloglevel=2 && python ...` (Windows cmd).
 5. **Empty val set**: If the val split CSV has very few rows, some classes may have zero val samples. This makes early stopping and accuracy metrics unreliable — check row counts after preprocessing: `wc -l data/splits/WLASL100/*.csv` (Linux/macOS) or `Get-ChildItem data\splits\WLASL100\*.csv | ForEach-Object { Write-Host "$($_.Name): $((Get-Content $_).Count)" }` (Windows PowerShell).
 6. **OneCycleLR NaN loss**: If you resume training from a checkpoint with a different total step count, the scheduler can go out of range. Start fresh or use `scheduler: cosine` for resumed runs.
+
+---
+
+## Recommended Library & CUDA Versions
+
+This project requires `torch>=2.1.0,<2.5.0`. The table below shows which CUDA toolkit versions are compatible with each PyTorch release, and the matching torchvision / torchaudio versions.
+
+### PyTorch ↔ CUDA Compatibility
+
+| PyTorch | torchvision | torchaudio | CUDA 11.8 | CUDA 12.1 | CUDA 12.4 | Install command |
+|---------|-------------|------------|-----------|-----------|-----------|-----------------|
+| 2.4.1 | 0.19.1 | 2.4.1 | Yes | Yes | Yes | `pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu124` |
+| 2.3.1 | 0.18.1 | 2.3.1 | Yes | Yes | No | `pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121` |
+| 2.2.2 | 0.17.2 | 2.2.2 | Yes | Yes | No | `pip install torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu121` |
+| 2.1.2 | 0.16.2 | 2.1.2 | Yes | Yes | No | `pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu121` |
+
+**How to choose:**
+- **CUDA 12.4** — Use PyTorch 2.4.x. Best for RTX 30xx/40xx/50xx with recent drivers.
+- **CUDA 12.1** — Supported by all versions above. Safe default for most setups.
+- **CUDA 11.8** — Supported by all versions above. Use if your driver is older or you're on a shared cluster.
+- **CPU only** — Append `--index-url https://download.pytorch.org/whl/cpu` to any install command.
+
+Check your CUDA version with `nvidia-smi` (top-right corner shows the maximum CUDA version your driver supports).
+
+> **Note:** The `--index-url` flag must match your CUDA version, not your PyTorch version. If you install the wrong CUDA variant, `torch.cuda.is_available()` will return `False`.
+
+### MediaPipe
+
+| Platform | Package | Version Range | Install command |
+|----------|---------|---------------|-----------------|
+| Linux / Windows | `mediapipe` | `>=0.10.7,<0.11.0` | `pip install mediapipe` (included in requirements.txt) |
+| macOS (Apple Silicon) | `mediapipe-silicon` | `>=0.10.7` | `pip install mediapipe-silicon` |
+| macOS (Intel) | `mediapipe` | `>=0.10.7,<0.11.0` | `pip install mediapipe` |
+
+- MediaPipe is compatible with **Python 3.9–3.12**.
+- On Apple Silicon, the standard `mediapipe` package may fail to install. Use `mediapipe-silicon` instead — it provides the same API.
+- Both packages provide `mediapipe.solutions.holistic` used by the preprocessing pipeline.
+
+### Other Key Libraries
+
+| Library | Required Version | Notes |
+|---------|-----------------|-------|
+| `opencv-python` | `>=4.8.0,<4.11.0` | Video I/O and frame capture. Webcam access requires system camera permissions. |
+| `numpy` | `>=1.24.0,<2.1.0` | NumPy 2.x introduced breaking changes — stay below 2.1 for compatibility with all dependencies. |
+| `onnxruntime` | `>=1.16.0,<1.20.0` | For ONNX export verification. Use `onnxruntime-gpu` instead if you want GPU-accelerated ONNX inference. |
+| `pytorchvideo` | `>=0.1.5,<0.2.0` | SlowFast and X3D backbones (Approach B). Only needed if using video models. |
+| `albumentations` | `>=1.3.1,<1.5.0` | Image augmentations for video frame preprocessing (Approach B/C). |
+| `kaggle` | `>=1.6.0,<1.8.0` | Kaggle API for dataset download. Only needed if using `scripts/download_kaggle.py`. |
+
+For the full list of dependencies with version ranges, see [`requirements.txt`](requirements.txt).
+
+Source: [PyTorch CUDA Compatibility Matrix](https://github.com/eminsafa/pytorch-cuda-compatibility) | [PyTorch Previous Versions](https://pytorch.org/get-started/previous-versions/)
 
 ---
 
