@@ -100,6 +100,8 @@ Shows which project files each module imports from (`src.*` imports only).
 | `scripts/download_kaggle.py` | Download full video archive from Kaggle | `src.data.preprocess` | `data/raw/*.mp4` |
 | `scripts/validate_videos.py` | Detect and remove fake HTML video files | (none) | Cleaned `data/raw/` |
 | `scripts/reset_configs.py` | Reset YAML configs to README defaults | (none) | `configs/*.yaml` |
+| `scripts/check_mediapipe.py` | Verify MediaPipe installation, diagnose `solutions` import issues | (none) | Diagnostic output to stdout |
+| `scripts/auto_config.py` | Auto-detect hardware (CUDA/MPS/CPU) and generate optimized configs | (none) | `configs/*.yaml` |
 
 ### Data Pipeline (`src/data/`)
 
@@ -292,6 +294,8 @@ All tests use `conftest.py` shared fixtures (tmp datasets, keypoint generators) 
 | `python scripts/download_kaggle.py` | `scripts/download_kaggle.py` | Download all videos from Kaggle |
 | `python scripts/validate_videos.py` | `scripts/validate_videos.py` | Scan and clean fake video files |
 | `python scripts/reset_configs.py` | `scripts/reset_configs.py` | Reset configs to recommended defaults |
+| `python scripts/check_mediapipe.py` | `scripts/check_mediapipe.py` | Verify MediaPipe installation |
+| `python scripts/auto_config.py` | `scripts/auto_config.py` | Auto-detect hardware and generate optimized config |
 | `python -m src.data.preprocess` | `src/data/preprocess.py` | Extract keypoints from videos, create splits |
 | `python -m src.training.train` | `src/training/train.py` | Train a model |
 | `python -m src.training.evaluate` | `src/training/evaluate.py` | Evaluate a trained model |

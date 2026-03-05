@@ -28,7 +28,12 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from src.data.preprocess import NUM_KEYPOINTS, normalize_keypoints
+from src.data.preprocess import (
+    NUM_KEYPOINTS,
+    _import_mediapipe_drawing,
+    _import_mediapipe_holistic,
+    normalize_keypoints,
+)
 from src.models.pose_transformer import build_pose_model
 from src.training.config import Config, load_config
 
@@ -133,22 +138,11 @@ class LivePredictor:
         self.model.to(self.device)
         self.model.eval()
 
-        # MediaPipe
-        try:
-            import mediapipe as mp
-
-            self._mp_holistic = mp.solutions.holistic
-            self._mp_drawing = mp.solutions.drawing_utils
-            self._mp_drawing_styles = mp.solutions.drawing_styles
-        except (ImportError, AttributeError) as exc:
-            raise ImportError(
-                "MediaPipe is required but could not be loaded. "
-                "Install it with:\n"
-                "  pip install 'mediapipe>=0.10.7,<0.11.0'\n"
-                "On Apple Silicon Mac:\n"
-                "  pip install mediapipe-silicon\n"
-                f"Original error: {exc}"
-            ) from exc
+        # MediaPipe — uses shared helper that handles Windows/Python 3.12 fallback
+        self._mp_holistic = _import_mediapipe_holistic()
+        holistic_mod, drawing_mod, styles_mod = _import_mediapipe_drawing()
+        self._mp_drawing = drawing_mod
+        self._mp_drawing_styles = styles_mod
         self.holistic = self._mp_holistic.Holistic(
             static_image_mode=False,
             model_complexity=1,
@@ -378,12 +372,8 @@ class ASLDisplay:
 
         # Draw MediaPipe landmarks if available
         if mp_results is not None:
-            try:
-                import mediapipe as mp
-
-                mp_drawing = mp.solutions.drawing_utils
-                mp_holistic = mp.solutions.holistic
-            except (ImportError, AttributeError):
+            mp_holistic, mp_drawing, _ = _import_mediapipe_drawing()
+            if mp_drawing is None:
                 return frame  # Skip landmark drawing if mediapipe unavailable
             drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
 

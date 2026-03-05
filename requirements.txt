@@ -5,7 +5,7 @@ torchaudio>=2.1.0,<2.5.0
 
 # Video & Image Processing
 opencv-python>=4.8.0,<4.11.0
-mediapipe>=0.10.7,<0.11.0
+mediapipe>=0.10.7,<=0.10.14
 av>=11.0.0,<13.0.0
 albumentations>=1.3.1,<1.5.0
 

@@ -24,37 +24,38 @@ A real-time ASL word-level recognition system that captures live webcam video, p
   - [8. Export to ONNX](#8-export-to-onnx) — Line 607
   - [9. Run Tests](#9-run-tests) — Line 635
 - **[Project Structure](#project-structure)** — Line 678
-- **[Configuration Guide](#configuration-guide)** — Line 743
-- **[Approach Details](#approach-details)** — Line 844
-  - [Approach A: Pose/Keypoint Transformer](#approach-a-posekeypoint-transformer) — Line 846
-  - [Approach B: RGB Video Classifier](#approach-b-rgb-video-classifier) — Line 866
-  - [Approach C: Hybrid Fusion](#approach-c-hybrid-fusion) — Line 874
-- **[Troubleshooting](#troubleshooting)** — Line 882
-  - [HTML files masquerading as videos](#html-files-masquerading-as-videos) — Line 884
-  - [MediaPipe installation issues](#mediapipe-installation-issues) — Line 887
-  - [CUDA out of memory](#cuda-out-of-memory) — Line 894
-  - [Webcam not detected](#webcam-not-detected) — Line 900
-  - [Low accuracy](#low-accuracy) — Line 906
-  - [Diagnosing partial data](#diagnosing-partial-data-most-common-issue) — Line 911
-  - [wlasl_variant / num_classes mismatch](#wlasl_variant--num_classes-mismatch) — Line 958
-- **[Recommended Configurations](#recommended-configurations)** — Line 964
-  - [WLASL100 (recommended starting point)](#wlasl100-recommended-starting-point) — Line 968
-  - [WLASL300](#wlasl300) — Line 1001
-  - [WLASL1000 / WLASL2000](#wlasl1000--wlasl2000) — Line 1023
-  - [Video Classifier (Approach B)](#video-classifier-approach-b) — Line 1047
-  - [Fusion (Approach C)](#fusion-approach-c) — Line 1063
-- **[Tips & Best Practices](#tips--best-practices)** — Line 1082
-  - [Hardware-Specific Setup](#hardware-specific-setup) — Line 1084
-  - [Training with Limited Data](#training-with-limited-data) — Line 1107
-  - [Improving Accuracy](#improving-accuracy) — Line 1119
-  - [What to Expect](#what-to-expect) — Line 1130
-  - [Common Pitfalls](#common-pitfalls) — Line 1142
-- **[Recommended Library & CUDA Versions](#recommended-library--cuda-versions)** — Line 1153
-  - [PyTorch ↔ CUDA Compatibility](#pytorch--cuda-compatibility) — Line 1157
-  - [MediaPipe](#mediapipe) — Line 1176
-  - [Other Key Libraries](#other-key-libraries) — Line 1188
-- **[Citation](#citation)** — Line 1205
-- **[License](#license)** — Line 1217
+- **[Configuration Guide](#configuration-guide)** — Line 745
+  - [Auto-Configure for Your Hardware](#auto-configure-for-your-hardware) — Line 759
+- **[Approach Details](#approach-details)** — Line 881
+  - [Approach A: Pose/Keypoint Transformer](#approach-a-posekeypoint-transformer) — Line 883
+  - [Approach B: RGB Video Classifier](#approach-b-rgb-video-classifier) — Line 903
+  - [Approach C: Hybrid Fusion](#approach-c-hybrid-fusion) — Line 911
+- **[Troubleshooting](#troubleshooting)** — Line 919
+  - [HTML files masquerading as videos](#html-files-masquerading-as-videos) — Line 921
+  - [MediaPipe installation issues](#mediapipe-installation-issues) — Line 924
+  - [CUDA out of memory](#cuda-out-of-memory) — Line 936
+  - [Webcam not detected](#webcam-not-detected) — Line 942
+  - [Low accuracy](#low-accuracy) — Line 948
+  - [Diagnosing partial data](#diagnosing-partial-data-most-common-issue) — Line 953
+  - [wlasl_variant / num_classes mismatch](#wlasl_variant--num_classes-mismatch) — Line 1000
+- **[Recommended Configurations](#recommended-configurations)** — Line 1006
+  - [WLASL100 (recommended starting point)](#wlasl100-recommended-starting-point) — Line 1010
+  - [WLASL300](#wlasl300) — Line 1043
+  - [WLASL1000 / WLASL2000](#wlasl1000--wlasl2000) — Line 1065
+  - [Video Classifier (Approach B)](#video-classifier-approach-b) — Line 1089
+  - [Fusion (Approach C)](#fusion-approach-c) — Line 1105
+- **[Tips & Best Practices](#tips--best-practices)** — Line 1124
+  - [Hardware-Specific Setup](#hardware-specific-setup) — Line 1126
+  - [Training with Limited Data](#training-with-limited-data) — Line 1149
+  - [Improving Accuracy](#improving-accuracy) — Line 1161
+  - [What to Expect](#what-to-expect) — Line 1172
+  - [Common Pitfalls](#common-pitfalls) — Line 1184
+- **[Recommended Library & CUDA Versions](#recommended-library--cuda-versions)** — Line 1195
+  - [PyTorch ↔ CUDA Compatibility](#pytorch--cuda-compatibility) — Line 1199
+  - [MediaPipe](#mediapipe) — Line 1218
+  - [Other Key Libraries](#other-key-libraries) — Line 1231
+- **[Citation](#citation)** — Line 1248
+- **[License](#license)** — Line 1260
 
 ---
 
@@ -728,7 +729,9 @@ Tests are fully isolated — they use pytest's `tmp_path` fixture for all file I
 │   ├── download_wlasl.py        # Download annotations, print video instructions
 │   ├── download_kaggle.py       # Download videos from Kaggle (fast alternative)
 │   ├── validate_videos.py       # Detect and remove HTML-disguised video files
-│   └── reset_configs.py         # Reset all configs/ to README.md recommended defaults
+│   ├── reset_configs.py         # Reset all configs/ to README.md recommended defaults
+│   ├── check_mediapipe.py       # Verify MediaPipe installation and diagnose issues
+│   └── auto_config.py           # Auto-detect hardware and generate optimized configs
 ├── checkpoints/                 # Saved model weights
 ├── logs/                        # TensorBoard training logs
 ├── pyproject.toml               # Pytest configuration
@@ -753,6 +756,41 @@ python scripts/reset_configs.py --only video   # reset only video_classifier.yam
 python scripts/reset_configs.py --only fusion  # reset only fusion.yaml
 python scripts/reset_configs.py --dry-run      # preview without writing
 ```
+
+### Auto-Configure for Your Hardware
+
+Detect your GPU/CPU and generate an optimized config automatically. The script probes CUDA VRAM, Apple Silicon MPS, or CPU, classifies your hardware into a performance tier, and writes a ready-to-train config:
+
+```bash
+# Pose approach (recommended starting point)
+python scripts/auto_config.py --approach pose
+
+# Video approach
+python scripts/auto_config.py --approach video --variant 100
+
+# Fusion approach
+python scripts/auto_config.py --approach fusion --variant 300
+
+# Preview without writing
+python scripts/auto_config.py --approach pose --dry-run
+
+# Force CPU mode (e.g. no GPU or Apple Silicon)
+python scripts/auto_config.py --approach pose --device cpu
+
+# Back up existing config before overwriting
+python scripts/auto_config.py --approach pose --backup
+```
+
+**Hardware tiers** (auto-detected from CUDA VRAM):
+
+| Tier | VRAM | Pose `batch_size` | Video `batch_size` | `fp16` |
+|------|------|-------------------|--------------------|--------|
+| **high** | >= 16 GB | 64 | 16 | true |
+| **mid** | >= 8 GB | 32 | 8 | true |
+| **low** | >= 4 GB | 16 | 4 | true |
+| **cpu** | MPS / CPU | 8 | 4 | false |
+
+Windows (PowerShell / Command Prompt): the commands are identical — just run them in your terminal.
 
 **Paths:**
 
@@ -887,7 +925,12 @@ Expired WLASL URLs often return an HTML lander page (saved as `.mp4`) rather tha
 ### MediaPipe installation issues
 - Compatible with Python 3.9–3.12.
 - On macOS with Apple Silicon: `pip install mediapipe-silicon`
-- If you see `AttributeError: module 'mediapipe' has no attribute 'solutions'`, your MediaPipe installation is broken or incompatible. Reinstall with `pip install --force-reinstall 'mediapipe>=0.10.7,<0.11.0'` (or `mediapipe-silicon` on Apple Silicon). The code catches this error and prints a helpful message.
+- **Run the diagnostic script** to verify your installation:
+  ```bash
+  python scripts/check_mediapipe.py
+  ```
+  This prints your mediapipe version, available modules, and whether the `Holistic` model is accessible.
+- If you see `AttributeError: module 'mediapipe' has no attribute 'solutions'`, your MediaPipe version is incompatible. This commonly happens on **Windows with Python 3.12** and newer mediapipe builds. Fix with: `pip install --force-reinstall mediapipe==0.10.11` (or `mediapipe-silicon` on Apple Silicon). The code has a fallback import path (`mediapipe.python.solutions`) that resolves this for some versions automatically.
 - Zero-padded keypoints for frames where detection fails are handled automatically.
 - Preprocessing uses `spawn` multiprocessing context (not `fork`) to avoid MediaPipe crashes on macOS.
 
@@ -1177,12 +1220,13 @@ Check your CUDA version with `nvidia-smi` (top-right corner shows the maximum CU
 
 | Platform | Package | Version Range | Install command |
 |----------|---------|---------------|-----------------|
-| Linux / Windows | `mediapipe` | `>=0.10.7,<0.11.0` | `pip install mediapipe` (included in requirements.txt) |
+| Linux / Windows | `mediapipe` | `>=0.10.7,<=0.10.14` | `pip install mediapipe` (included in requirements.txt) |
 | macOS (Apple Silicon) | `mediapipe-silicon` | `>=0.10.7` | `pip install mediapipe-silicon` |
-| macOS (Intel) | `mediapipe` | `>=0.10.7,<0.11.0` | `pip install mediapipe` |
+| macOS (Intel) | `mediapipe` | `>=0.10.7,<=0.10.14` | `pip install mediapipe` |
 
 - MediaPipe is compatible with **Python 3.9–3.12**.
 - On Apple Silicon, the standard `mediapipe` package may fail to install. Use `mediapipe-silicon` instead — it provides the same API.
+- On **Windows with Python 3.12**, some mediapipe versions expose `solutions` under `mediapipe.python.solutions` instead of `mediapipe.solutions`. If you hit this issue, pin to `mediapipe==0.10.11`.
 - Both packages provide `mediapipe.solutions.holistic` used by the preprocessing pipeline.
 
 ### Other Key Libraries

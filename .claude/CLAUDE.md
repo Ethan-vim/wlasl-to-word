@@ -1,112 +1,79 @@
-/age# CLAUDE.md
+#### IMPORTANT (THIS SHOULD BE REMEMBERED AND APPLIED AT ALL TIMES, IT IS PERMANENT PROJECT MEMORY, DO NOT FORGET!)
+All the below stated is important.
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-Always follow instructions in CLAUDE.md (this file#)
-## Project Overview
+# Context
 
-Live American Sign Language (ASL) recognition system using the WLASL (Word-Level American Sign Language) dataset. This project is in early development — no source code exists yet.
+You are a agent that should help the human inferring what the human implies and doing whatever the human implies.
 
-## Environment
+# In a codebase,
 
-- Python 3.12 (managed via `../.venv`)
-- Activate: `source ../.venv/bin/activate`
-- Install dependencies (once requirements.txt is created): `pip install -r requirements.txt`
-- Read PROJECT_DES.md
-- Read README.md
-- Run all unit tests to ensure reliability, if unit tests fail, fix issues.
+## Errors
 
-## Codebase Adaptation/Understanding
-- Read PROJECT_DES.md
-- Read README.md
-- Always ask user if something is unclear
-- Read all files in the project folder
+When the user sends the agent a clear error that has happened when running something in the codebase,
+the agent should follow by solving that error and replying clearly with what the agent did to codebase to fix it,
+what files has been changed, etc.
 
-# File edits
-
-Clarity when editing files.
-
-## Adjusting Codebase
-A lot of times, after making new features, important things to the codebase, they won't adapt into the rest of the codebase.
-So there often needs other file changes
+### Examples
 
 For example,
-
-After implementing a feature that allows a user to contact customer service.
-The frontend might not be linked to that feature, resulting in inefficient usage.
-
-In a repository, the README.md might not be up-to-date with the new files after every new edit, feature, etc.
-Those edits related to user usage, setup, installation, methods, must all be added into README.md to clarify the features added.
+```
+<user>: Index out of bounds error: line: 437 in main.py
+<agent>:  The user is implying me to fix the error...
+	  I will look in the codebase and that file to figure out what's wrong...
+	  The array index was added by one in the source code.
+	
+	  Fixes:
+		Removed faulty incrementation of index variable in main.py
+	
+	  Files changed:
+		main.py
+	  Summary:
+	  - main.py can now work properly. 
+```
 
 For example,
-
-A new feature has been implemented in the codebase that allows the user to use a webcam to deliver WLASL to the transformer model.
-README.md isn't frequently updated, so that feature is not written into README.md.
-
-That feature must be written into README.md to make know how to use that feature.
-
-Overall, all file edits should be adapted into the codebase.  
-I also state explicitly that new features must be written into README.md with a usage-guide and other info about it.
-
-## Conclusion
-
-After every user prompt, at the end of the output, state what has been changed in each file, what has been added, what is fixed, etc.
-
-Each file edit prompt output should follow this structure:
-
 ```
-<File_Name>:
-        - Bug Fixes: 
-        - Feature implementations:
-        - Usage:
+<user>: ImportError: line: 14 in src/data/preproccess.py...
+<agent>: The user is implying me to fix the error in src/data/preproccess.py...
+	 I will look in the codebase and that file to find out what's wrong with the source code...
+	 
+	 Fixes:
+		Removed unneccesarry libary imported
 
-<File_Name>:
-        - Bug Fixes: 
-        - Feature implementations:
-        - Usage:
+	 Files changed: 
+		src/data/preproccess.py
+	Summary:
 
-Conclusion: # Generic
-        - Features implementations:
-        - Bug fixes: 
-        - Usage:
+	- src/data/preproccess.py can now process data while working now.
 ```
 
-Each explanation should be concise, clear, and explanatory.
+## Changing other files to fit codebase
 
-# Python
+When the user asks to change a file, implement a new feature, the agent should respond by:
+	- Adding the feature
+	- Opting features from other files to help the task
+	- Updating README.md
+	- Updating STRUCTURE.md
+	- Updating all files that would fit the new feature, code into the codebase.
 
-General stuff for Python Programming language
+### Examples
 
-## Machine/Deep Learning
-        
-When making a Machine/Deep learning project with python, the folder structure should look something like this:
-<hash_tag> = comment
+For example,
+```
+<user>: Now make it so that the user of the app can use their webcam to enter letters into the keyboard.
+<agent>: <Updating files, inherit from "Errors" Section>
+	 Updating README.md...
+	 Updating STRUCTURE.md...
+	 
+	 Summary:
+
+	 - Updated README.md
+	 - Updated STRUCTURE.md
+	 - Updated <other files that needs to be edited to make feature>
 
 ```
-checkpoints/
-        best_model.pt
-configs/
-data/
-        annotations/
-        processed/
-        raw/
-        splits/
-logs/
-notebooks/
-scripts/
-src/ # Python Package(s) including itself
-        __init__.py
-        data/
-                __init__.py
-        inference/
-                __init__.py
-        models/
-                __init__.py
-        training/
-                __init__.py
-tests/ # Python Package
-        __init__.py
-requirements.txt
-README.md
-```
 
-Other files may be added to ensure git tracking, functionality.  This is just a folder/file structure.
+## Inheritance
+
+All the rules I just defined should inherit from each other.
+The agent should follow all these rules while not overlapping. 

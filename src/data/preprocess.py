@@ -22,6 +22,91 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# MediaPipe import helper
+# ---------------------------------------------------------------------------
+
+
+def _import_mediapipe_holistic():
+    """Import MediaPipe Holistic with multiple fallback paths.
+
+    Some mediapipe builds (especially on Windows with Python 3.12) expose the
+    solutions API under ``mediapipe.python.solutions`` instead of the top-level
+    ``mediapipe.solutions``.  This helper tries both paths before giving up.
+
+    Returns
+    -------
+    module
+        The ``holistic`` solutions module (has ``.Holistic`` class).
+
+    Raises
+    ------
+    ImportError
+        If mediapipe is not installed or the solutions module is unavailable.
+    """
+    # Path 1: standard import (works on most platforms)
+    try:
+        import mediapipe as mp
+
+        return mp.solutions.holistic
+    except ImportError:
+        raise  # mediapipe not installed at all
+    except AttributeError:
+        pass  # mp.solutions missing — try fallback
+
+    # Path 2: internal package path (some Windows / Python 3.12 builds)
+    try:
+        from mediapipe.python.solutions import holistic  # type: ignore[import]
+
+        return holistic
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+    # Both paths failed — give a diagnostic error
+    import mediapipe as mp
+
+    available = [x for x in dir(mp) if not x.startswith("_")]
+    raise ImportError(
+        f"MediaPipe {getattr(mp, '__version__', 'unknown')} is installed but the "
+        f"'solutions' module is not available.\n"
+        f"Available top-level attributes: {available}\n\n"
+        f"This is a known issue on Windows with Python 3.12+.\n"
+        f"Fix — run one of these:\n"
+        f"  pip install --force-reinstall mediapipe==0.10.11\n"
+        f"  pip install --force-reinstall mediapipe==0.10.9\n"
+        f"On Apple Silicon Mac:\n"
+        f"  pip install mediapipe-silicon"
+    )
+
+
+def _import_mediapipe_drawing():
+    """Import MediaPipe drawing utilities with fallback paths.
+
+    Returns
+    -------
+    tuple[module, module, module]
+        (holistic, drawing_utils, drawing_styles) modules.
+    """
+    try:
+        import mediapipe as mp
+
+        return mp.solutions.holistic, mp.solutions.drawing_utils, mp.solutions.drawing_styles
+    except (ImportError, AttributeError):
+        pass
+
+    try:
+        from mediapipe.python.solutions import (  # type: ignore[import]
+            drawing_styles,
+            drawing_utils,
+            holistic,
+        )
+
+        return holistic, drawing_utils, drawing_styles
+    except (ImportError, ModuleNotFoundError):
+        return None, None, None
+
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -235,20 +320,7 @@ def extract_keypoints_mediapipe(
     np.ndarray or None
         The keypoint array, or None if the video could not be opened.
     """
-    # Lazy import to avoid loading mediapipe at module level
-    try:
-        import mediapipe as mp
-
-        mp_holistic = mp.solutions.holistic
-    except (ImportError, AttributeError) as exc:
-        raise ImportError(
-            "MediaPipe is required but could not be loaded. "
-            "Install it with:\n"
-            "  pip install 'mediapipe>=0.10.7,<0.11.0'\n"
-            "On Apple Silicon Mac:\n"
-            "  pip install mediapipe-silicon\n"
-            f"Original error: {exc}"
-        ) from exc
+    mp_holistic = _import_mediapipe_holistic()
 
     video_path = Path(video_path)
     output_path = Path(output_path)
