@@ -639,8 +639,9 @@ python -m src.inference.export_onnx `
 
 ```bash
 source .venv/bin/activate
-python -m pytest                          # full test suite (136 tests)
+python -m pytest                          # full test suite (277 tests)
 python -m pytest tests/test_augment.py    # specific test file
+python -m pytest tests/test_dependencies.py  # dependency compatibility tests
 python -m pytest -q                       # quiet output
 ```
 
@@ -654,7 +655,7 @@ Or without activating the venv:
 
 ```powershell
 .venv\Scripts\Activate.ps1
-python -m pytest                          # full test suite (136 tests)
+python -m pytest                          # full test suite (277 tests)
 python -m pytest tests\test_augment.py    # specific test file
 python -m pytest -q                       # quiet output
 ```
@@ -673,6 +674,10 @@ python -m pytest
 ```
 
 Tests are fully isolated — they use pytest's `tmp_path` fixture for all file I/O and never touch project data, configs, or checkpoints. The `pyproject.toml` configures test discovery, verbose output, and warning suppression.
+
+**Note:** `pytest` must be installed in the venv (`pip install pytest`). It is not listed in `requirements.txt` because it is a dev-only dependency.
+
+The `test_dependencies.py` file (110 tests) verifies that every third-party library used by the `src/` code is importable, meets the minimum version from `requirements.txt`, and that the specific features relied upon (e.g. `batch_first` Transformers, `label_smoothing` in CrossEntropyLoss, seaborn heatmaps, ONNX Runtime sessions) work correctly with the installed versions.
 
 ---
 
@@ -720,7 +725,8 @@ Tests are fully isolated — they use pytest's `tmp_path` fixture for all file I
 │   ├── test_models.py           # PoseTransformer, PoseBiLSTM, FusionModel
 │   ├── test_predict.py          # SignPredictor inference paths
 │   ├── test_preprocess.py       # Normalization, annotation parsing, splits
-│   └── test_train.py            # Accuracy, mixup helpers
+│   ├── test_train.py            # Accuracy, mixup helpers
+│   └── test_dependencies.py    # Library version & feature compatibility (110 tests)
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb
 │   ├── 02_keypoint_visualization.ipynb

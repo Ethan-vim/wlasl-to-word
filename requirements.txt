@@ -10,7 +10,7 @@ av>=11.0.0,<13.0.0
 albumentations>=1.3.1,<1.5.0
 
 # Numerical & Data
-numpy>=1.24.0,<2.1.0
+numpy>=1.24.0,<2.0.0
 pandas>=2.0.0,<2.3.0
 scikit-learn>=1.3.0,<1.6.0
 

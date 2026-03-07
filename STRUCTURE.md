@@ -281,6 +281,7 @@ Each test file maps to one or more source modules:
 | `test_predict.py` | `src/inference/predict.py` — SignPredictor inference paths |
 | `test_preprocess.py` | `src/data/preprocess.py` — normalization, annotation parsing, splits |
 | `test_train.py` | `src/training/train.py` — accuracy, mixup helpers |
+| `test_dependencies.py` | All `requirements.txt` libraries — version checks, feature compatibility, src module imports (110 tests) |
 
 All tests use `conftest.py` shared fixtures (tmp datasets, keypoint generators) and are fully isolated (no project data or checkpoints needed).
 
