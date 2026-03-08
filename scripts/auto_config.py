@@ -105,7 +105,7 @@ def detect_hardware(device_override: str | None = None) -> HardwareInfo:
     if device == "cuda" and torch.cuda.is_available():
         props = torch.cuda.get_device_properties(0)
         device_name = props.name
-        vram_gb = props.total_mem / (1024**3)
+        vram_gb = props.total_memory / (1024**3)
         cuda_version = torch.version.cuda or ""
         gpu_count = torch.cuda.device_count()
     elif device == "mps":
