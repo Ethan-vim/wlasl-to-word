@@ -742,6 +742,7 @@ The `test_dependencies.py` file (110 tests) verifies that every third-party libr
 ├── logs/                        # TensorBoard training logs
 ├── pyproject.toml               # Pytest configuration
 ├── requirements.txt
+├── CONTRIBUTING.md              # Contribution guide, commit standards, signing setup
 └── STRUCTURE.md                 # Full workflow & dependency graph (which file calls which)
 ```
 
