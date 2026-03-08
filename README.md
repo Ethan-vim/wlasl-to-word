@@ -105,6 +105,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
+python scripts/auto_config.py --approach pose
 ```
 
 **Windows (PowerShell):**
@@ -117,6 +118,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 
 pip install -r requirements.txt
+python scripts/auto_config.py --approach pose
 ```
 
 **Windows (Command Prompt):**
@@ -129,6 +131,7 @@ python -m venv .venv
 .venv\Scripts\activate.bat
 
 pip install -r requirements.txt
+python scripts/auto_config.py --approach pose
 ```
 
 #### Installing PyTorch with CUDA support
@@ -270,31 +273,33 @@ If you want the fastest path from zero to training, run these commands in order 
 # 1. Setup
 pip install -r requirements.txt
 
-# 2. Configure Kaggle API (one-time — see "One-time Kaggle API setup" above)
+# 2. Auto-detect hardware and generate optimized config
+python scripts/auto_config.py --approach pose
 
-# 3. Download all videos from Kaggle (~5 GB, ~12K videos)
+# 3. Configure Kaggle API (one-time — see "One-time Kaggle API setup" above)
+
+# 4. Download all videos from Kaggle (~5 GB, ~12K videos)
 #    --subset only controls the annotation summary printed after download;
 #    the full archive is always downloaded regardless of the variant chosen.
 python scripts/download_kaggle.py --subset WLASL100
 
-# 4. Validate and clean up bad files
+# 5. Validate and clean up bad files
 python scripts/validate_videos.py --video-dir data/raw --delete
 
-# 5. Extract keypoints
+# 6. Extract keypoints
 python -m src.data.preprocess --data-dir data --subset WLASL100 --mode keypoints
 
-# 6. Train (see device-specific configs below)
+# 7. Train (see device-specific configs below)
 python -m src.training.train --config configs/pose_transformer.yaml
 
-# 7. Evaluate
+# 8. Evaluate
 #    Linux/macOS uses \ for line continuation; Windows PowerShell uses `
 python -m src.training.evaluate \
     --config configs/pose_transformer.yaml \
     --checkpoint checkpoints/best_model.pt \
     --split val --output-dir eval_results
-```
 
-On Windows PowerShell, the evaluate command (step 7) becomes:
+On Windows PowerShell, the evaluate command (step 8) becomes:
 
 ```powershell
 python -m src.training.evaluate `
