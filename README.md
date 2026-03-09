@@ -1273,3 +1273,6 @@ Source: [PyTorch CUDA Compatibility Matrix](https://github.com/eminsafa/pytorch-
 ## License
 
 This project is for educational and research purposes. The WLASL dataset has its own licensing terms — check the [official repository](https://github.com/dxli94/WLASL) before commercial use.
+
+## Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
