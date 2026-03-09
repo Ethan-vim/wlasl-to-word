@@ -219,7 +219,7 @@ class VideoClassifier(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def build_video_model(cfg: Any) -> VideoClassifier:
+def build_video_model(cfg: Any) -> nn.Module:
     """Build a video classifier from a configuration object.
 
     Parameters

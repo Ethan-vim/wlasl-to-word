@@ -218,7 +218,7 @@ class FusionModel(nn.Module):
 
 def build_fusion_model(
     cfg: Any, pose_model: nn.Module, video_model: nn.Module
-) -> FusionModel:
+) -> nn.Module:
     """Build a fusion model from a configuration and pre-built sub-models.
 
     Parameters
