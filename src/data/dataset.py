@@ -18,6 +18,10 @@ from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 
 logger = logging.getLogger(__name__)
 
+# ImageNet normalization constants
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD = (0.229, 0.224, 0.225)
+
 
 class WLASLKeypointDataset(Dataset):
     """Dataset that loads precomputed ``.npy`` keypoint files.
@@ -236,8 +240,8 @@ class WLASLVideoDataset(Dataset):
         tensor = tensor.permute(3, 0, 1, 2)  # (T, H, W, 3) -> (3, T, H, W)
 
         # ImageNet normalization
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1, 1)
+        mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1, 1)
+        std = torch.tensor(IMAGENET_STD).view(3, 1, 1, 1)
         tensor = (tensor - mean) / std
 
         return tensor, label
@@ -423,8 +427,8 @@ class WLASLFusionDataset(Dataset):
 
         tensor = torch.from_numpy(frames_arr).float() / 255.0
         tensor = tensor.permute(3, 0, 1, 2)  # (3, T, H, W)
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1, 1)
+        mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1, 1)
+        std = torch.tensor(IMAGENET_STD).view(3, 1, 1, 1)
         return (tensor - mean) / std
 
 
