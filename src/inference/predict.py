@@ -17,6 +17,7 @@ import torch
 import torch.nn.functional as F
 
 from src.data.augment import get_val_transforms
+from src.data.dataset import IMAGENET_MEAN, IMAGENET_STD
 from src.data.preprocess import (
     extract_keypoints_mediapipe,
     normalize_keypoints,
@@ -200,8 +201,8 @@ class SignPredictor:
         # Normalize
         tensor = torch.from_numpy(frames_arr).float() / 255.0
         tensor = tensor.permute(3, 0, 1, 2)  # (3, T, H, W)
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1, 1)
+        mean = torch.tensor(IMAGENET_MEAN).view(3, 1, 1, 1)
+        std = torch.tensor(IMAGENET_STD).view(3, 1, 1, 1)
         tensor = (tensor - mean) / std
         tensor = tensor.unsqueeze(0).to(self.device)  # (1, 3, T, H, W)
 
