@@ -338,14 +338,15 @@ num_workers: 2
 T: 64
 d_model: 128
 nhead: 4
-num_layers: 3
-dropout: 0.3
+num_layers: 2
+dropout: 0.1
 lr: 3.0e-4
-weight_decay: 1.0e-3
-mixup_alpha: 0.2
-scheduler: onecycle
+weight_decay: 5.0e-4
+label_smoothing: 0.0
+mixup_alpha: 0.15
+scheduler: cosine
 weighted_sampling: true
-epochs: 100
+epochs: 250
 ```
 
 Use `--device cpu` for inference and live demo. Stick to Approach A (pose_transformer) — video models are too slow on CPU for training.
@@ -356,19 +357,20 @@ Use `--device cpu` for inference and live demo. Stick to Approach A (pose_transf
 approach: pose_transformer
 wlasl_variant: 100          # match your preprocessed subset (100, 300, 1000, or 2000)
 fp16: true                   # faster training, lower memory
-batch_size: 32               # increase to 64 for large GPUs
-num_workers: 4
+batch_size: 64               # increase to 64 for large GPUs
+num_workers: 8
 T: 64
 d_model: 128
 nhead: 4
-num_layers: 3
-dropout: 0.3
+num_layers: 2
+dropout: 0.1
 lr: 3.0e-4
-weight_decay: 1.0e-3
-mixup_alpha: 0.2
-scheduler: onecycle
+weight_decay: 5.0e-4
+label_smoothing: 0.0
+mixup_alpha: 0.15
+scheduler: cosine
 weighted_sampling: true
-epochs: 100
+epochs: 250
 ```
 
 Monitor GPU memory with `nvidia-smi`. If you run out of memory, reduce `batch_size` first, then `T`.
@@ -384,14 +386,15 @@ num_workers: 2
 T: 64
 d_model: 128
 nhead: 4
-num_layers: 3
-dropout: 0.3
+num_layers: 2
+dropout: 0.1
 lr: 3.0e-4
-weight_decay: 1.0e-3
-mixup_alpha: 0.2
-scheduler: onecycle
+weight_decay: 5.0e-4
+label_smoothing: 0.0
+mixup_alpha: 0.15
+scheduler: cosine
 weighted_sampling: true
-epochs: 100
+epochs: 250
 ```
 
 Use `--device cpu` for the live demo to avoid MPS overhead. Install MediaPipe with `pip install mediapipe-silicon` if the standard package fails.
@@ -857,7 +860,7 @@ Windows (PowerShell / Command Prompt): the commands are identical — just run t
 | `d_model`       | Transformer/LSTM embedding dimension (auto-scaled per variant: 128/192/256/384 for 100/300/1000/2000) | `128`              |
 | `nhead`         | Number of attention heads (auto-scaled per variant: 4/6/8/8 for 100/300/1000/2000)                    | `4`                |
 | `num_layers`    | Number of encoder layers (auto-scaled per variant: 2/4/5/6 for 100/300/1000/2000)                     | `2`                |
-| `dropout`       | Dropout rate                                                                                          | `0.5`              |
+| `dropout`       | Dropout rate (auto-scaled per variant: 0.1/0.3/0.4/0.5 for 100/300/1000/2000)                        | `0.5`              |
 | `use_motion`    | Concatenate velocity (frame differences) with position features                                       | `true`             |
 | `fusion`        | Fusion strategy: `concat` or `attention` (Approach C only)                                            | `concat`           |
 | `fusion_dim`    | Fusion layer dimension (Approach C only)                                                              | `256`              |
@@ -868,18 +871,18 @@ Windows (PowerShell / Command Prompt): the commands are identical — just run t
 
 | Parameter                 | Description                                                      | Default    |
 | ------------------------- | ---------------------------------------------------------------- | ---------- |
-| `epochs`                  | Maximum training epochs                                          | `100`      |
+| `epochs`                  | Maximum training epochs                                          | `250`      |
 | `batch_size`              | Training batch size                                              | `32`       |
 | `lr`                      | Learning rate                                                    | `3e-4`     |
-| `weight_decay`            | AdamW weight decay                                               | `1e-3`     |
-| `warmup_epochs`           | Linear warmup epochs before scheduler takes over                 | `10`       |
-| `label_smoothing`         | Label smoothing factor (0 = disabled)                            | `0.15`     |
+| `weight_decay`            | AdamW weight decay                                               | `5e-4`     |
+| `warmup_epochs`           | Linear warmup epochs before scheduler takes over                 | `15`       |
+| `label_smoothing`         | Label smoothing factor (0 = disabled). Set to 0 for lowest loss. | `0.0`      |
 | `grad_clip`               | Max gradient norm for clipping                                   | `1.0`      |
 | `fp16`                    | Mixed-precision (FP16) training                                  | `true`     |
 | `weighted_sampling`       | Weighted sampler to counter class imbalance                      | `false`    |
-| `early_stopping_patience` | Epochs without val improvement before stopping                   | `15`       |
-| `mixup_alpha`             | Mixup interpolation parameter (0 = disabled)                     | `0.4`      |
-| `scheduler`               | LR scheduler: `onecycle` or `cosine` (warmup + cosine annealing) | `onecycle` |
+| `early_stopping_patience` | Epochs without val improvement before stopping                   | `50`       |
+| `mixup_alpha`             | Mixup interpolation parameter (0 = disabled)                     | `0.15`     |
+| `scheduler`               | LR scheduler: `onecycle` or `cosine` (warmup + cosine annealing) | `cosine`   |
 
 
 **Evaluation:**
@@ -921,7 +924,16 @@ Windows (PowerShell / Command Prompt): the commands are identical — just run t
 | `resume_checkpoint` | Path to checkpoint for resuming training | `null`  |
 
 
-`num_classes` is **always** auto-derived from `wlasl_variant` (100 → 100, 300 → 300, etc.). Any explicit `num_classes` in the YAML is silently overridden — do not set it manually. Similarly, `d_model`, `nhead`, and `num_layers` are auto-scaled per variant in `__post_init__` (WLASL100: 128/4/2, WLASL300: 192/6/4, WLASL1000: 256/8/5, WLASL2000: 384/8/6). WLASL100 uses 2 encoder layers (reduced from 3) because small-dataset transformer research shows >2 layers overfits with fewer than 10 samples per class.
+`num_classes` is **always** auto-derived from `wlasl_variant` (100 → 100, 300 → 300, etc.). Any explicit `num_classes` in the YAML is silently overridden — do not set it manually. Similarly, `d_model`, `nhead`, `num_layers`, and `dropout` are all auto-scaled per variant in `__post_init__`:
+
+| Variant   | `d_model` | `nhead` | `num_layers` | `dropout` |
+|-----------|-----------|---------|--------------|-----------|
+| WLASL100  | 128       | 4       | 2            | 0.1       |
+| WLASL300  | 192       | 6       | 4            | 0.3       |
+| WLASL1000 | 256       | 8       | 5            | 0.4       |
+| WLASL2000 | 384       | 8       | 6            | 0.5       |
+
+Dropout is intentionally low for smaller variants: a tiny model (d_model=128, 2 layers) paired with high dropout (≥0.5) applies so much regularisation that the gradient signal is crushed and the loss never decreases. The classification head uses the standard `LayerNorm → Dropout → Linear` order to avoid a train/eval distribution mismatch that arises when dropout is applied before normalisation.
 
 ---
 
@@ -950,7 +962,7 @@ Both `PoseTransformer` and `PoseBiLSTM` use a **multi-stage input projection** i
 - Random scaling (0.9x–1.1x)
 - Keypoint dropout (frame-level and landmark-level)
 
-**Regularization:** Mixup interpolation (`mixup_alpha: 0.4`), label smoothing (0.15), dropout (0.5), weight decay (1e-3), and weighted sampling for class imbalance.
+**Regularization:** Light mixup interpolation (`mixup_alpha: 0.15`), no label smoothing (avoids loss floor), variant-scaled dropout (0.1 for WLASL100, up to 0.5 for WLASL2000), weight decay (5e-4), and weighted sampling for class imbalance.
 
 ### Approach B: RGB Video Classifier
 
@@ -1078,32 +1090,31 @@ These are tuned starting points for each dataset variant. Copy the base config a
 
 ### WLASL100 (recommended starting point)
 
-~2,000 annotations, ~100 glosses. Expect 400–1,200 usable training samples depending on download availability. Uses `pose_bilstm` by default — literature shows BiLSTM outperforms Transformer on fewer than 20 samples per class (WLASL100 typically has ~6–8). Transformers are used for WLASL300, 1000, and 2000 where more data is available.
+~2,000 annotations, ~100 glosses. Expect 400–1,200 usable training samples depending on download availability. Uses `pose_transformer` with low dropout (0.1) and no label smoothing for maximum convergence. Architecture is auto-scaled by `Config.__post_init__`.
 
 ```yaml
-approach: pose_bilstm
+approach: pose_transformer
 wlasl_variant: 100
 T: 64
 use_motion: true            # velocity features (position + frame differences)
 d_model: 128                # auto-derived from wlasl_variant
 nhead: 4                    # auto-derived from wlasl_variant
-num_layers: 2               # auto-derived from wlasl_variant (reduced: >2 layers overfits with <10 samples/class)
-dropout: 0.5                # higher dropout for ~6-8 samples/class (WLASL100)
-batch_size: 32
+num_layers: 2               # auto-derived from wlasl_variant
+dropout: 0.1                # auto-derived — low dropout for small model
+batch_size: 64
 lr: 3.0e-4
-scheduler: onecycle
-warmup_epochs: 10
-label_smoothing: 0.15
-mixup_alpha: 0.4            # stronger mixup regularization for small dataset
+scheduler: cosine
+warmup_epochs: 15
+label_smoothing: 0.0        # no label smoothing — avoids artificial loss floor
+mixup_alpha: 0.15           # light mixup for diversity
 weighted_sampling: true     # important — classes are imbalanced
-early_stopping_patience: 15
-epochs: 100
+early_stopping_patience: 50
+epochs: 250
 ```
 
-With very few training videos (<500 usable), reduce model further:
+With very few training videos (<500 usable), reduce batch size:
 
 ```yaml
-d_model: 64
 batch_size: 16
 lr: 1.0e-4
 ```
@@ -1119,16 +1130,16 @@ T: 64
 d_model: 192                # auto-derived from wlasl_variant
 nhead: 6                    # auto-derived from wlasl_variant
 num_layers: 4               # auto-derived from wlasl_variant
-dropout: 0.35
+dropout: 0.3                # auto-derived
 batch_size: 32
 lr: 3.0e-4
 scheduler: cosine
-warmup_epochs: 10
-label_smoothing: 0.15
-mixup_alpha: 0.4
+warmup_epochs: 15
+label_smoothing: 0.0
+mixup_alpha: 0.15
 weighted_sampling: true
-early_stopping_patience: 25
-epochs: 150
+early_stopping_patience: 50
+epochs: 300
 ```
 
 ### WLASL1000
@@ -1142,16 +1153,16 @@ T: 64
 d_model: 256                # auto-derived from wlasl_variant
 nhead: 8                    # auto-derived from wlasl_variant
 num_layers: 5               # auto-derived from wlasl_variant
-dropout: 0.25
+dropout: 0.4                # auto-derived
 batch_size: 64
 lr: 3.0e-4
 scheduler: cosine
 warmup_epochs: 15
-label_smoothing: 0.15
-mixup_alpha: 0.4
+label_smoothing: 0.0
+mixup_alpha: 0.15
 weighted_sampling: true
-early_stopping_patience: 30
-epochs: 200
+early_stopping_patience: 50
+epochs: 350
 ```
 
 ### WLASL2000
@@ -1165,16 +1176,16 @@ T: 64
 d_model: 384                # auto-derived from wlasl_variant
 nhead: 8                    # auto-derived from wlasl_variant
 num_layers: 6               # auto-derived from wlasl_variant
-dropout: 0.2
+dropout: 0.5                # auto-derived
 batch_size: 64
 lr: 3.0e-4
 scheduler: cosine
 warmup_epochs: 15
-label_smoothing: 0.15
-mixup_alpha: 0.4
+label_smoothing: 0.0
+mixup_alpha: 0.15
 weighted_sampling: true
-early_stopping_patience: 30
-epochs: 200
+early_stopping_patience: 50
+epochs: 400
 ```
 
 For WLASL2000, consider the video approach (Approach B) or fusion (Approach C) — the added visual detail helps disambiguate the larger vocabulary.
@@ -1260,10 +1271,11 @@ WLASL's expired URLs mean you may only get 30–60% of the annotated videos. Whe
 
 - **Start with Approach A** (pose_transformer). It trains fastest and is easiest to debug.
 - **Enable motion features** (`use_motion: true`) — velocity information captures signing dynamics and typically adds 5–8% accuracy.
-- **Use mixup** (`mixup_alpha: 0.4`) — regularizes training by interpolating between random sample pairs.
+- **Use light mixup** (`mixup_alpha: 0.15`) — regularizes training without preventing confident predictions. Higher values floor the loss.
+- **Disable label smoothing** (`label_smoothing: 0.0`) — label smoothing creates an artificial loss floor (~0.23 for 100 classes). Remove it for lowest loss.
 - **Enable TTA for evaluation** (`use_tta: true`) — averages predictions over original + horizontally flipped input for 2–4% evaluation boost.
 - **Use the error analysis notebook** (`notebooks/03_error_analysis.ipynb`) to find which classes are confused, then inspect those videos manually.
-- **Try the cosine scheduler** (`scheduler: cosine`) if onecycle doesn't converge well — cosine with warm-up is often more stable.
+- **Use cosine scheduler** (`scheduler: cosine`) — cosine annealing with warm-up converges better than onecycle for long training runs.
 - **Increase sequence length** (`T: 96` or `T: 128`) if signs in your dataset are long — some signs take 3+ seconds at 64 fps (the default frame extraction rate).
 - **Scale up to fusion** (Approach C) once you've maxed out Approach A's accuracy — it typically adds 3–8% top-1 over pose-only.
 

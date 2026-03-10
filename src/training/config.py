@@ -91,24 +91,37 @@ class Config:
     def __post_init__(self) -> None:
         """Derive num_classes and model architecture from wlasl_variant.
 
-        Smaller subsets use fewer transformer parameters to avoid overfitting;
-        larger subsets scale up for capacity.
+        Smaller subsets scale down transformer size AND dropout to keep the
+        regularisation proportional to model capacity.  Without this, a tiny
+        model (d_model=64, 1 layer) paired with high dropout (0.5) has so much
+        noise in the gradient that the loss never meaningfully decreases.
+
+        Architecture auto-scaling only applies to pose-based approaches
+        (pose_transformer, pose_bilstm) and the pose sub-model in fusion.
+        Video classifiers use pretrained 3D CNN backbones with their own
+        optimal dropout (typically 0.3-0.5), so we leave dropout untouched
+        for the ``video`` approach.
         """
         variant_to_classes = {100: 100, 300: 300, 1000: 1000, 2000: 2000}
         if self.wlasl_variant in variant_to_classes:
             self.num_classes = variant_to_classes[self.wlasl_variant]
 
         variant_to_arch = {
-            100:  {"d_model": 64, "nhead": 4, "num_layers": 1},
-            300:  {"d_model": 192, "nhead": 6, "num_layers": 4},
-            1000: {"d_model": 256, "nhead": 8, "num_layers": 5},
-            2000: {"d_model": 384, "nhead": 8, "num_layers": 6},
+            100:  {"d_model": 128, "nhead": 4, "num_layers": 2, "dropout": 0.1},
+            300:  {"d_model": 192, "nhead": 6, "num_layers": 4, "dropout": 0.3},
+            1000: {"d_model": 256, "nhead": 8, "num_layers": 5, "dropout": 0.4},
+            2000: {"d_model": 384, "nhead": 8, "num_layers": 6, "dropout": 0.5},
         }
         if self.wlasl_variant in variant_to_arch:
             arch = variant_to_arch[self.wlasl_variant]
             self.d_model = arch["d_model"]
             self.nhead = arch["nhead"]
             self.num_layers = arch["num_layers"]
+            # Only override dropout for pose-based approaches.  Video
+            # classifiers use pretrained backbones that need their own
+            # dropout (typically 0.3-0.5 for 3D CNNs).
+            if self.approach != "video":
+                self.dropout = arch["dropout"]
 
 
 def load_config(path: str | Path) -> Config:

@@ -1,9 +1,9 @@
 ## Approach C: Hybrid Fusion (Pose + Video)
-## Combines Approach A and B for best accuracy.
-## Values from README.md "Recommended Configurations" section.
+## Optimized for lowest possible loss on WLASL100.
+## Hardware: RTX 4080 (16 GB VRAM)
 
 approach: fusion
-fusion: concat             # start with concat, try attention if concat plateaus
+fusion: concat
 fusion_dim: 256
 
 # Sub-model configs
@@ -17,29 +17,30 @@ wlasl_variant: 100
 T: 64
 image_size: 224
 
-# Pose Transformer settings
+# Pose Transformer settings (auto-scaled by __post_init__ for the variant)
 d_model: 128
 nhead: 4
-num_layers: 3
-dropout: 0.5
+num_layers: 2
+dropout: 0.1
 
 # Data loading
-num_workers: 4              # parallel data-loading workers (0 = main process only)
+num_workers: 8
 
 # Training
-epochs: 100
+epochs: 250
 batch_size: 8
 lr: 1.0e-4
-weight_decay: 1.0e-3
+weight_decay: 5.0e-4
 warmup_epochs: 10
-label_smoothing: 0.05
+label_smoothing: 0.0        # removed — was artificially flooring loss
 grad_clip: 1.0
 fp16: true
 weighted_sampling: false
-early_stopping_patience: 15
+early_stopping_patience: 40
+mixup_alpha: 0.1            # very light mixup
 
 # Scheduler
-scheduler: onecycle
+scheduler: cosine
 
 # Logging
 use_wandb: false
@@ -55,5 +56,5 @@ fps_display: true
 # Paths
 data_dir: data
 output_dir: outputs
-checkpoint_dir: checkpoints
-log_dir: logs
+checkpoint_dir: checkpoints/fusion
+log_dir: logs/fusion

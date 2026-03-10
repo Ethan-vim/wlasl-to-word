@@ -27,24 +27,28 @@ class TestConfigDefaults:
 
     def test_variant_scales_model_architecture(self):
         cfg100 = Config(wlasl_variant=100)
-        assert cfg100.d_model == 64
+        assert cfg100.d_model == 128
         assert cfg100.nhead == 4
-        assert cfg100.num_layers == 1
+        assert cfg100.num_layers == 2
+        assert cfg100.dropout == 0.1
 
         cfg300 = Config(wlasl_variant=300)
         assert cfg300.d_model == 192
         assert cfg300.nhead == 6
         assert cfg300.num_layers == 4
+        assert cfg300.dropout == 0.3
 
         cfg1000 = Config(wlasl_variant=1000)
         assert cfg1000.d_model == 256
         assert cfg1000.nhead == 8
         assert cfg1000.num_layers == 5
+        assert cfg1000.dropout == 0.4
 
         cfg2000 = Config(wlasl_variant=2000)
         assert cfg2000.d_model == 384
         assert cfg2000.nhead == 8
         assert cfg2000.num_layers == 6
+        assert cfg2000.dropout == 0.5
 
     def test_new_fields_exist(self):
         cfg = Config()

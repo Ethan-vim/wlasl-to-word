@@ -194,21 +194,21 @@ def build_config_values(
             "use_motion": True,
             "d_model": 128,
             "nhead": 4,
-            "num_layers": 3,
-            "dropout": 0.5,
+            "num_layers": 2,
+            "dropout": 0.1,
             "num_workers": 4,
             "batch_size": 32,
             "lr": 3e-4,
-            "weight_decay": 1e-3,
-            "warmup_epochs": 10,
-            "label_smoothing": 0.05,
+            "weight_decay": 5e-4,
+            "warmup_epochs": 15,
+            "label_smoothing": 0.0,
             "grad_clip": 1.0,
             "fp16": True,
             "weighted_sampling": True,
-            "early_stopping_patience": 15,
-            "mixup_alpha": 0.4,
-            "scheduler": "onecycle",
-            "epochs": 100,
+            "early_stopping_patience": 50,
+            "mixup_alpha": 0.15,
+            "scheduler": "cosine",
+            "epochs": 250,
             "use_tta": False,
         }
     elif approach == "video":
@@ -219,19 +219,19 @@ def build_config_values(
             "wlasl_variant": variant,
             "T": 64,
             "image_size": 224,
-            "dropout": 0.5,
+            "dropout": 0.3,
             "num_workers": 4,
             "batch_size": 8,
             "lr": 1e-4,
-            "weight_decay": 1e-3,
+            "weight_decay": 5e-4,
             "warmup_epochs": 10,
-            "label_smoothing": 0.05,
+            "label_smoothing": 0.0,
             "grad_clip": 1.0,
             "fp16": True,
             "weighted_sampling": False,
-            "early_stopping_patience": 15,
-            "scheduler": "onecycle",
-            "epochs": 100,
+            "early_stopping_patience": 40,
+            "scheduler": "cosine",
+            "epochs": 250,
         }
     else:  # fusion
         cfg = {
@@ -246,83 +246,76 @@ def build_config_values(
             "image_size": 224,
             "d_model": 128,
             "nhead": 4,
-            "num_layers": 3,
-            "dropout": 0.5,
+            "num_layers": 2,
+            "dropout": 0.1,
             "num_workers": 4,
             "batch_size": 8,
             "lr": 1e-4,
-            "weight_decay": 1e-3,
+            "weight_decay": 5e-4,
             "warmup_epochs": 10,
-            "label_smoothing": 0.05,
+            "label_smoothing": 0.0,
             "grad_clip": 1.0,
             "fp16": True,
             "weighted_sampling": False,
-            "early_stopping_patience": 15,
-            "scheduler": "onecycle",
-            "epochs": 100,
+            "early_stopping_patience": 40,
+            "mixup_alpha": 0.1,
+            "scheduler": "cosine",
+            "epochs": 250,
         }
 
     # --- Variant-specific overrides (pose approach) ---
-    # WLASL100: ~6-8 samples/class → use BiLSTM + aggressive regularization.
-    # Larger subsets scale up transformer capacity and relax dropout.
+    # Architecture and dropout must scale together — a tiny model with high
+    # dropout has so much gradient noise that the loss never decreases.
+    # These values match Config.__post_init__ in src/training/config.py.
     if approach == "pose":
         if variant == 100:
             cfg.update({
-                "approach": "pose_bilstm",
-                "d_model": 64,
+                "d_model": 128,
                 "nhead": 4,
-                "num_layers": 1,
-                "dropout": 0.6,
+                "num_layers": 2,
+                "dropout": 0.1,
             })
         elif variant == 300:
             cfg.update({
                 "d_model": 192,
                 "nhead": 6,
                 "num_layers": 4,
-                "dropout": 0.35,
-                "scheduler": "cosine",
-                "early_stopping_patience": 25,
-                "epochs": 150,
+                "dropout": 0.3,
+                "epochs": 300,
             })
         elif variant == 1000:
             cfg.update({
                 "d_model": 256,
                 "nhead": 8,
                 "num_layers": 5,
-                "dropout": 0.25,
-                "scheduler": "cosine",
-                "warmup_epochs": 15,
-                "early_stopping_patience": 30,
-                "epochs": 200,
+                "dropout": 0.4,
+                "epochs": 350,
             })
         elif variant >= 2000:
             cfg.update({
                 "d_model": 384,
                 "nhead": 8,
                 "num_layers": 6,
-                "dropout": 0.2,
-                "scheduler": "cosine",
-                "warmup_epochs": 15,
-                "early_stopping_patience": 30,
-                "epochs": 200,
+                "dropout": 0.5,
+                "epochs": 400,
             })
 
     # --- Variant-specific overrides (video/fusion) ---
     if approach in ("video", "fusion") and variant >= 300:
-        cfg["epochs"] = 150
-        cfg["early_stopping_patience"] = 25
+        cfg["epochs"] = 300
     if approach in ("video", "fusion") and variant >= 1000:
-        cfg["epochs"] = 200
-        cfg["early_stopping_patience"] = 30
+        cfg["epochs"] = 350
+    if approach in ("video", "fusion") and variant >= 2000:
+        cfg["epochs"] = 400
 
-    # Scale fusion sub-model architecture with variant
+    # Scale fusion sub-model architecture with variant (matches Config.__post_init__)
     if approach == "fusion":
         if variant == 300:
-            cfg.update({"d_model": 192, "nhead": 6, "num_layers": 4})
+            cfg.update({"d_model": 192, "nhead": 6, "num_layers": 4, "dropout": 0.3})
         elif variant == 1000:
-            cfg.update({"d_model": 256, "nhead": 8, "num_layers": 5})
+            cfg.update({"d_model": 256, "nhead": 8, "num_layers": 5, "dropout": 0.4})
         elif variant >= 2000:
-            cfg.update({"d_model": 384, "nhead": 8, "num_layers": 6})
+            cfg.update({"d_model": 384, "nhead": 8, "num_layers": 6, "dropout": 0.5})
 
     # --- Tier-specific overrides (hardware-dependent) ---
     tier_overrides = _get_tier_overrides(approach, tier, hw)
@@ -572,6 +565,7 @@ grad_clip: {values['grad_clip']}
 fp16: {_bool(values['fp16'])}
 weighted_sampling: {_bool(values['weighted_sampling'])}
 early_stopping_patience: {values['early_stopping_patience']}
+mixup_alpha: {values['mixup_alpha']}
 
 # Scheduler
 scheduler: {values['scheduler']}

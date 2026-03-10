@@ -262,11 +262,12 @@ configs/fusion.yaml                                             │
                                                                         live_demo.py
                                                                         export_onnx.py
 
-Config.__post_init__() auto-derives:
-    wlasl_variant: 100  ──>  num_classes: 100,  d_model: 128, nhead: 4, num_layers: 2
-    wlasl_variant: 300  ──>  num_classes: 300,  d_model: 192, nhead: 6, num_layers: 4
-    wlasl_variant: 1000 ──>  num_classes: 1000, d_model: 256, nhead: 8, num_layers: 5
-    wlasl_variant: 2000 ──>  num_classes: 2000, d_model: 384, nhead: 8, num_layers: 6
+Config.__post_init__() auto-derives (dropout scales with model size, skipped for video approach):
+    wlasl_variant: 100  ──>  num_classes: 100,  d_model: 128, nhead: 4, num_layers: 2, dropout: 0.1
+    wlasl_variant: 300  ──>  num_classes: 300,  d_model: 192, nhead: 6, num_layers: 4, dropout: 0.3
+    wlasl_variant: 1000 ──>  num_classes: 1000, d_model: 256, nhead: 8, num_layers: 5, dropout: 0.4
+    wlasl_variant: 2000 ──>  num_classes: 2000, d_model: 384, nhead: 8, num_layers: 6, dropout: 0.5
+    Note: dropout override is skipped when approach="video" (3D CNNs use their own dropout).
 ```
 
 ---

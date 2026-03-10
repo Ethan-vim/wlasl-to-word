@@ -104,10 +104,11 @@ class PoseTransformer(nn.Module):
             enable_nested_tensor=False,
         )
 
-        # Classification head
+        # Classification head — LayerNorm before Dropout to avoid train/eval
+        # distribution mismatch (Dropout after norm is the standard order).
         self.head = nn.Sequential(
-            nn.Dropout(dropout),
             nn.LayerNorm(d_model),
+            nn.Dropout(dropout),
             nn.Linear(d_model, num_classes),
         )
 
@@ -239,9 +240,10 @@ class PoseBiLSTM(nn.Module):
         )
 
         # Classification head (BiLSTM output dim = 2 * hidden_dim = d_model)
+        # LayerNorm before Dropout — standard order avoids train/eval mismatch.
         self.head = nn.Sequential(
-            nn.Dropout(dropout),
             nn.LayerNorm(d_model),
+            nn.Dropout(dropout),
             nn.Linear(d_model, num_classes),
         )
 

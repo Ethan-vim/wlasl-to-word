@@ -147,13 +147,14 @@ class TestDetermineTier:
 class TestBuildConfigValues:
     def test_pose_mid_100(self, cuda_hw):
         cfg = auto_config.build_config_values("pose", 100, "mid", cuda_hw)
-        assert cfg["approach"] == "pose_bilstm"
+        assert cfg["approach"] == "pose_transformer"
         assert cfg["batch_size"] == 32
         assert cfg["T"] == 64
         assert cfg["fp16"] is True
         assert cfg["wlasl_variant"] == 100
-        assert cfg["d_model"] == 64
-        assert cfg["num_layers"] == 1
+        assert cfg["d_model"] == 128
+        assert cfg["num_layers"] == 2
+        assert cfg["dropout"] == 0.1
 
     def test_pose_cpu_100(self, cpu_hw):
         cfg = auto_config.build_config_values("pose", 100, "cpu", cpu_hw)
@@ -169,14 +170,14 @@ class TestBuildConfigValues:
         assert cfg["nhead"] == 6
         assert cfg["num_layers"] == 4
         assert cfg["scheduler"] == "cosine"
-        assert cfg["epochs"] == 150
+        assert cfg["epochs"] == 300
 
     def test_pose_1000(self, cuda_hw):
         cfg = auto_config.build_config_values("pose", 1000, "mid", cuda_hw)
         assert cfg["d_model"] == 256
         assert cfg["nhead"] == 8
         assert cfg["num_layers"] == 5
-        assert cfg["epochs"] == 200
+        assert cfg["epochs"] == 350
 
     def test_video_mid_100(self, cuda_hw):
         cfg = auto_config.build_config_values("video", 100, "mid", cuda_hw)
@@ -214,12 +215,12 @@ class TestBuildConfigValues:
 
     def test_variant_300_video_epochs(self, cuda_hw):
         cfg = auto_config.build_config_values("video", 300, "mid", cuda_hw)
-        assert cfg["epochs"] == 150
+        assert cfg["epochs"] == 300
 
     def test_variant_2000_fusion_epochs(self, cuda_hw):
         cfg = auto_config.build_config_values("fusion", 2000, "mid", cuda_hw)
-        assert cfg["epochs"] == 200
-        assert cfg["early_stopping_patience"] == 30
+        assert cfg["epochs"] == 400
+        assert cfg["early_stopping_patience"] == 40
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +234,7 @@ class TestRenderYaml:
         content = auto_config.render_yaml("pose", values, cuda_hw, "mid")
         parsed = yaml.safe_load(content)
         assert isinstance(parsed, dict)
-        assert parsed["approach"] == "pose_bilstm"
+        assert parsed["approach"] == "pose_transformer"
 
     def test_header_present(self, cuda_hw):
         values = auto_config.build_config_values("pose", 100, "mid", cuda_hw)
@@ -296,7 +297,7 @@ class TestMainDryRun:
         )
         assert result.returncode == 0
         assert "WLASL Auto-Config" in result.stdout
-        assert "approach: pose_bilstm" in result.stdout
+        assert "approach: pose_transformer" in result.stdout
 
     def test_dry_run_video(self):
         result = subprocess.run(
@@ -334,4 +335,4 @@ class TestMainDryRun:
         assert result.returncode == 0
         assert out.exists()
         parsed = yaml.safe_load(out.read_text())
-        assert parsed["approach"] == "pose_bilstm"
+        assert parsed["approach"] == "pose_transformer"
