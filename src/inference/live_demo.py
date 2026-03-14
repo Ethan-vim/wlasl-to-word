@@ -34,7 +34,7 @@ from src.data.preprocess import (
     _import_mediapipe_holistic,
     normalize_keypoints,
 )
-from src.models.pose_transformer import build_pose_model
+from src.models.prototypical import build_model
 from src.training.config import Config, load_config
 
 logger = logging.getLogger(__name__)
@@ -119,24 +119,17 @@ class LivePredictor:
         self.device = torch.device(device)
         self.class_names = class_names or [str(i) for i in range(cfg.num_classes)]
 
-        # Build model based on configured approach
-        if cfg.approach in ("pose_transformer", "pose_bilstm"):
-            self.model = build_pose_model(cfg)
-        else:
-            # Live demo primarily uses pose-based models for real-time keypoint
-            # inference.  Fall back to pose_transformer for other approaches.
-            logger.warning(
-                "Live demo uses pose-based inference; building pose_transformer "
-                "regardless of cfg.approach='%s'",
-                cfg.approach,
-            )
-            self.model = build_pose_model(cfg)
+        # Build prototypical model
+        self.model = build_model(cfg)
         ckpt = torch.load(
             str(checkpoint_path), map_location=self.device, weights_only=False
         )
         self.model.load_state_dict(ckpt["model_state_dict"])
         self.model.to(self.device)
         self.model.eval()
+
+        # Compute prototypes from training data
+        self._load_prototypes(cfg)
 
         # MediaPipe — uses shared helper that handles Windows/Python 3.12 fallback
         self._mp_holistic = _import_mediapipe_holistic()
@@ -151,6 +144,30 @@ class LivePredictor:
         )
 
         logger.info("LivePredictor initialized (device=%s)", self.device)
+
+    def _load_prototypes(self, cfg: Config) -> None:
+        """Compute prototypes from training data for inference."""
+        from src.data.augment import get_val_transforms
+        from src.data.dataset import WLASLKeypointDataset, get_dataloader
+
+        data_dir = Path(cfg.data_dir)
+        train_csv = data_dir / "splits" / f"WLASL{cfg.wlasl_variant}" / "train.csv"
+        processed_dir = data_dir / "processed"
+
+        if not train_csv.exists():
+            logger.warning("Training split not found; prototypes not computed.")
+            return
+
+        transform = get_val_transforms(T=cfg.T)
+        train_ds = WLASLKeypointDataset(
+            split_csv=train_csv,
+            keypoint_dir=processed_dir,
+            transform=transform,
+            T=cfg.T,
+            use_motion=getattr(cfg, "use_motion", False),
+        )
+        loader = get_dataloader(train_ds, batch_size=32, shuffle=False, num_workers=0)
+        self.model.compute_prototypes(loader)
 
     def preprocess_frame(self, frame_bgr: np.ndarray) -> tuple[np.ndarray, object]:
         """Extract MediaPipe keypoints from a single BGR frame.
@@ -235,7 +252,7 @@ class LivePredictor:
         tensor = torch.from_numpy(keypoints_flat).float().unsqueeze(0).to(self.device)
 
         with torch.no_grad():
-            logits = self.model(tensor)
+            logits = self.model.classify(tensor)
             probs = F.softmax(logits, dim=1).squeeze(0)
 
         top5_probs, top5_indices = probs.topk(5)

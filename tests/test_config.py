@@ -11,7 +11,7 @@ from src.training.config import Config, load_config, save_config
 class TestConfigDefaults:
     def test_default_values(self):
         cfg = Config()
-        assert cfg.approach == "pose_transformer"
+        assert cfg.approach == "stgcn_proto"
         assert cfg.num_keypoints == 543
         assert cfg.T == 64
         assert cfg.num_classes == 100
@@ -28,45 +28,51 @@ class TestConfigDefaults:
     def test_variant_scales_model_architecture(self):
         cfg100 = Config(wlasl_variant=100)
         assert cfg100.d_model == 128
-        assert cfg100.nhead == 4
-        assert cfg100.num_layers == 2
+        assert cfg100.gcn_channels == [64, 128, 128]
         assert cfg100.dropout == 0.1
 
         cfg300 = Config(wlasl_variant=300)
         assert cfg300.d_model == 192
-        assert cfg300.nhead == 6
-        assert cfg300.num_layers == 4
-        assert cfg300.dropout == 0.3
+        assert cfg300.gcn_channels == [64, 128, 256]
+        assert cfg300.dropout == 0.15
 
         cfg1000 = Config(wlasl_variant=1000)
         assert cfg1000.d_model == 256
-        assert cfg1000.nhead == 8
-        assert cfg1000.num_layers == 5
-        assert cfg1000.dropout == 0.4
+        assert cfg1000.gcn_channels == [64, 128, 256]
+        assert cfg1000.dropout == 0.2
 
         cfg2000 = Config(wlasl_variant=2000)
         assert cfg2000.d_model == 384
-        assert cfg2000.nhead == 8
-        assert cfg2000.num_layers == 6
-        assert cfg2000.dropout == 0.5
+        assert cfg2000.gcn_channels == [64, 128, 256, 256]
+        assert cfg2000.dropout == 0.2
 
     def test_new_fields_exist(self):
         cfg = Config()
         assert hasattr(cfg, "use_motion")
-        assert hasattr(cfg, "mixup_alpha")
+        assert hasattr(cfg, "n_way")
+        assert hasattr(cfg, "k_shot")
+        assert hasattr(cfg, "q_query")
+        assert hasattr(cfg, "num_episodes")
         assert hasattr(cfg, "use_tta")
 
     def test_use_motion_default(self):
         cfg = Config()
         assert cfg.use_motion is True
 
-    def test_mixup_alpha_default(self):
+    def test_prototypical_defaults(self):
         cfg = Config()
-        assert cfg.mixup_alpha == 0.4
+        assert cfg.n_way == 20
+        assert cfg.k_shot == 3
+        assert cfg.q_query == 2
+        assert cfg.num_episodes == 500
 
     def test_use_tta_default(self):
         cfg = Config()
         assert cfg.use_tta is False
+
+    def test_embedding_dim_synced(self):
+        cfg = Config(wlasl_variant=100)
+        assert cfg.embedding_dim == cfg.d_model
 
 
 class TestLoadConfig:
@@ -85,30 +91,29 @@ class TestLoadConfig:
 
     def test_load_full_yaml(self, tmp_config_yaml):
         cfg = load_config(tmp_config_yaml)
-        assert cfg.approach == "pose_transformer"
+        assert cfg.approach == "stgcn_proto"
         assert cfg.T == 16
-        assert cfg.d_model == 64
 
     def test_load_new_fields(self, tmp_path):
         p = tmp_path / "cfg.yaml"
-        p.write_text("use_motion: true\nmixup_alpha: 0.3\nuse_tta: true\n")
+        p.write_text("use_motion: true\nn_way: 10\nk_shot: 5\nuse_tta: true\n")
         cfg = load_config(p)
         assert cfg.use_motion is True
-        assert cfg.mixup_alpha == 0.3
+        assert cfg.n_way == 10
+        assert cfg.k_shot == 5
         assert cfg.use_tta is True
 
 
 class TestSaveConfig:
     def test_roundtrip(self, tmp_path):
         # wlasl_variant=300 → __post_init__ sets d_model=192; verify roundtrip preserves it
-        cfg = Config(T=16, wlasl_variant=300, use_motion=True, mixup_alpha=0.5)
+        cfg = Config(T=16, wlasl_variant=300, use_motion=True)
         out = tmp_path / "saved.yaml"
         save_config(cfg, out)
         loaded = load_config(out)
         assert loaded.T == 16
         assert loaded.d_model == 192
         assert loaded.use_motion is True
-        assert loaded.mixup_alpha == 0.5
 
     def test_file_created(self, tmp_path):
         cfg = Config()

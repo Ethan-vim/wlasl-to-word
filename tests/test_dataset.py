@@ -1,4 +1,4 @@
-"""Tests for src.data.dataset — WLASLKeypointDataset, get_dataloader, helpers."""
+"""Tests for src.data.dataset — WLASLKeypointDataset, get_dataloader."""
 
 import numpy as np
 import pandas as pd
@@ -7,7 +7,6 @@ import torch
 
 from src.data.dataset import (
     WLASLKeypointDataset,
-    _pad_or_crop_seq,
     get_dataloader,
 )
 
@@ -15,31 +14,50 @@ NUM_KP = 543
 
 
 # ---------------------------------------------------------------------------
-# _pad_or_crop_seq
+# WLASLKeypointDataset._pad_or_crop
 # ---------------------------------------------------------------------------
 
 
-class TestPadOrCropSeq:
-    def test_exact_length(self):
-        kps = np.random.rand(64, NUM_KP, 3).astype(np.float32)
-        result = _pad_or_crop_seq(kps, T=64)
-        assert result.shape[0] == 64
+class TestPadOrCrop:
+    def _make_ds(self, tmp_path):
+        """Create a minimal dataset for testing."""
+        kp_dir = tmp_path / "kps"
+        kp_dir.mkdir()
+        df = pd.DataFrame({
+            "video_id": ["v0"],
+            "label_idx": [0],
+            "gloss": ["test"],
+        })
+        csv = tmp_path / "split.csv"
+        df.to_csv(csv, index=False)
+        kps = np.random.rand(30, NUM_KP, 3).astype(np.float32)
+        np.save(str(kp_dir / "v0.npy"), kps)
+        return WLASLKeypointDataset(csv, kp_dir, T=16)
 
-    def test_longer_crops(self):
+    def test_exact_length(self, tmp_path):
+        ds = self._make_ds(tmp_path)
+        kps = np.random.rand(16, NUM_KP, 3).astype(np.float32)
+        result = ds._pad_or_crop(kps)
+        assert result.shape[0] == 16
+
+    def test_longer_crops(self, tmp_path):
+        ds = self._make_ds(tmp_path)
         kps = np.random.rand(100, NUM_KP, 3).astype(np.float32)
-        result = _pad_or_crop_seq(kps, T=32)
-        assert result.shape == (32, NUM_KP, 3)
+        result = ds._pad_or_crop(kps)
+        assert result.shape == (16, NUM_KP, 3)
 
-    def test_shorter_pads(self):
+    def test_shorter_pads(self, tmp_path):
+        ds = self._make_ds(tmp_path)
         kps = np.random.rand(10, NUM_KP, 3).astype(np.float32)
-        result = _pad_or_crop_seq(kps, T=64)
-        assert result.shape == (64, NUM_KP, 3)
+        result = ds._pad_or_crop(kps)
+        assert result.shape == (16, NUM_KP, 3)
         # Padding should duplicate last frame
         np.testing.assert_array_equal(result[10], result[9])
 
-    def test_empty_input(self):
+    def test_empty_input(self, tmp_path):
+        ds = self._make_ds(tmp_path)
         kps = np.zeros((0, NUM_KP, 3), dtype=np.float32)
-        result = _pad_or_crop_seq(kps, T=16)
+        result = ds._pad_or_crop(kps)
         assert result.shape == (16, NUM_KP, 3)
         assert np.all(result == 0)
 

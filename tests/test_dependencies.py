@@ -49,7 +49,7 @@ class TestTorch:
         np.testing.assert_allclose(t.numpy(), arr)
 
     def test_nn_module_forward(self):
-        """Linear + LayerNorm + Dropout pipeline used in pose_transformer."""
+        """Linear + LayerNorm + Dropout pipeline used in ST-GCN."""
         layer = torch.nn.Sequential(
             torch.nn.Linear(10, 16),
             torch.nn.LayerNorm(16),
@@ -58,43 +58,23 @@ class TestTorch:
         out = layer(torch.randn(2, 10))
         assert out.shape == (2, 16)
 
-    def test_transformer_encoder_layer(self):
-        """TransformerEncoderLayer with batch_first + norm_first (>= 2.0)."""
-        enc_layer = torch.nn.TransformerEncoderLayer(
-            d_model=32,
-            nhead=4,
-            dim_feedforward=64,
-            dropout=0.1,
-            activation="gelu",
-            batch_first=True,
-            norm_first=True,
-        )
-        encoder = torch.nn.TransformerEncoder(enc_layer, num_layers=2, enable_nested_tensor=False)
-        x = torch.randn(2, 8, 32)
-        out = encoder(x)
-        assert out.shape == (2, 8, 32)
+    def test_conv2d(self):
+        """Conv2d used in ST-GCN blocks for spatial and temporal convolutions."""
+        conv = torch.nn.Conv2d(3, 64, kernel_size=1)
+        x = torch.randn(2, 3, 16, 33)
+        out = conv(x)
+        assert out.shape == (2, 64, 16, 33)
 
-    def test_lstm_bidirectional(self):
-        """BiLSTM used in PoseBiLSTM."""
-        lstm = torch.nn.LSTM(
-            input_size=32, hidden_size=16, num_layers=2,
-            batch_first=True, bidirectional=True, dropout=0.1,
-        )
-        x = torch.randn(2, 8, 32)
-        out, (h, c) = lstm(x)
-        assert out.shape == (2, 8, 32)  # 16 * 2 directions
+    def test_batchnorm2d(self):
+        """BatchNorm2d used in ST-GCN blocks."""
+        bn = torch.nn.BatchNorm2d(64)
+        x = torch.randn(2, 64, 16, 33)
+        out = bn(x)
+        assert out.shape == (2, 64, 16, 33)
 
-    def test_multihead_attention(self):
-        """MHA with batch_first used in CrossAttentionFusion."""
-        mha = torch.nn.MultiheadAttention(embed_dim=32, num_heads=4, dropout=0.0, batch_first=True)
-        q = torch.randn(2, 1, 32)
-        k = v = torch.randn(2, 1, 32)
-        out, _ = mha(q, k, v)
-        assert out.shape == (2, 1, 32)
-
-    def test_cross_entropy_with_label_smoothing(self):
-        """Label smoothing used in train.py."""
-        criterion = torch.nn.CrossEntropyLoss(label_smoothing=0.1)
+    def test_cross_entropy(self):
+        """Cross entropy used in prototypical training."""
+        criterion = torch.nn.CrossEntropyLoss()
         logits = torch.randn(4, 10)
         targets = torch.randint(0, 10, (4,))
         loss = criterion(logits, targets)
@@ -210,27 +190,11 @@ class TestTorch:
 
 
 class TestTorchvision:
-    """Verify torchvision video models used in video_i3d.py."""
+    """Verify torchvision is importable (used as dependency)."""
 
     def test_version_in_range(self):
         v = _get_version("torchvision")
         assert v >= Version("0.16.0")
-
-    def test_import_video_models(self):
-        import torchvision.models.video as vm
-        assert hasattr(vm, "r2plus1d_18")
-        assert hasattr(vm, "r3d_18")
-        assert hasattr(vm, "mc3_18")
-
-    def test_r2plus1d_18_loads(self):
-        """r2plus1d_18 backbone used in VideoClassifier."""
-        import torchvision.models.video as vm
-        model = vm.r2plus1d_18(weights=None)
-        model.fc = torch.nn.Identity()
-        dummy = torch.randn(1, 3, 8, 56, 56)
-        with torch.no_grad():
-            out = model(dummy)
-        assert out.shape[1] == 512
 
 
 class TestTorchaudio:
@@ -360,7 +324,7 @@ class TestNumPy:
     def test_random_operations(self):
         arr = np.random.rand(30, 543, 3).astype(np.float32)
         assert arr.shape == (30, 543, 3)
-        # random.beta used in _mixup_data
+        # random.beta used in augmentation sampling
         lam = np.random.beta(0.2, 0.2)
         assert 0.0 <= lam <= 1.0
 
@@ -502,13 +466,13 @@ class TestPyYAML:
 
     def test_safe_load(self):
         import yaml
-        data = yaml.safe_load("approach: pose_transformer\nwlasl_variant: 100\n")
-        assert data["approach"] == "pose_transformer"
+        data = yaml.safe_load("approach: stgcn_proto\nwlasl_variant: 100\n")
+        assert data["approach"] == "stgcn_proto"
         assert data["wlasl_variant"] == 100
 
     def test_dump(self):
         import yaml
-        data = {"approach": "video", "T": 32, "fp16": True}
+        data = {"approach": "stgcn_proto", "T": 32, "fp16": True}
         text = yaml.dump(data, default_flow_style=False, sort_keys=False)
         reloaded = yaml.safe_load(text)
         assert reloaded == data
@@ -739,7 +703,7 @@ class TestTimm:
 
 
 class TestPytorchVideo:
-    """Verify pytorchvideo (used for video backbone models in video_i3d.py)."""
+    """Verify pytorchvideo (optional video processing dependency)."""
 
     def test_import(self):
         import pytorchvideo
@@ -927,8 +891,8 @@ class TestSrcImports:
 
     def test_import_dataset(self):
         from src.data.dataset import (
-            WLASLKeypointDataset, WLASLVideoDataset, WLASLFusionDataset,
-            get_dataloader, _pad_or_crop_seq,
+            WLASLKeypointDataset,
+            get_dataloader,
         )
 
     def test_import_preprocess(self):
@@ -938,18 +902,19 @@ class TestSrcImports:
         )
         assert NUM_KEYPOINTS == 543
 
-    def test_import_pose_transformer(self):
-        from src.models.pose_transformer import (
-            PoseTransformer, PoseBiLSTM, build_pose_model,
+    def test_import_stgcn(self):
+        from src.models.stgcn import (
+            STGCNEncoder, STGCNBlock, STGCNBranch, SpatialGraphConv,
+            build_stgcn_encoder, build_spatial_graph,
         )
 
-    def test_import_video_i3d(self):
-        from src.models.video_i3d import VideoClassifier, build_video_model
-
-    def test_import_fusion(self):
-        from src.models.fusion import (
-            FusionModel, CrossAttentionFusion, build_fusion_model,
+    def test_import_prototypical(self):
+        from src.models.prototypical import (
+            PrototypicalNetwork, build_model,
         )
+
+    def test_import_episode_sampler(self):
+        from src.data.episode_sampler import EpisodicBatchSampler
 
     def test_import_predict(self):
         from src.inference.predict import SignPredictor
@@ -965,5 +930,7 @@ class TestSrcImports:
             compute_metrics, plot_confusion_matrix, find_hard_negatives, evaluate_latency,
         )
 
-    def test_import_train(self):
-        from src.training.train import _accuracy, _mixup_data, _mixup_criterion
+    def test_import_train_prototypical(self):
+        from src.training.train_prototypical import (
+            _split_episode, train_one_epoch, validate, main,
+        )

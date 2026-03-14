@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 import torch
 
-from src.models.pose_transformer import PoseTransformer
+from src.models.stgcn import STGCNEncoder
+from src.models.prototypical import PrototypicalNetwork, build_model
 from src.training.config import Config
 
 
@@ -19,25 +20,46 @@ class TestPredictFromKeypoints:
         from src.inference.predict import SignPredictor
 
         cfg = Config(
-            approach="pose_transformer",
+            approach="stgcn_proto",
             num_keypoints=NUM_KP,
-            num_classes=10,
             wlasl_variant=10,
             d_model=64,
-            nhead=4,
-            num_layers=1,
-            T=16,
+            gcn_channels=[32, 64],
             dropout=0.0,
             use_motion=use_motion,
+            T=16,
         )
-        model = PoseTransformer(
-            num_keypoints=NUM_KP, num_classes=10, d_model=64,
-            nhead=4, num_layers=1, T=16, use_motion=use_motion,
-        )
+        model = build_model(cfg)
+
+        # Compute fake prototypes so classify works
+        data = torch.randn(20, 16, NUM_KP * (6 if use_motion else 3))
+        labels = torch.tensor([i % 10 for i in range(20)])
+        from torch.utils.data import DataLoader, TensorDataset
+        ds = TensorDataset(data, labels)
+        loader = DataLoader(ds, batch_size=10)
+        model.compute_prototypes(loader)
+
         ckpt_path = tmp_path / "model.pt"
         torch.save({"model_state_dict": model.state_dict()}, str(ckpt_path))
 
         class_names = [f"sign_{i}" for i in range(10)]
+
+        # Create dummy train CSV so _load_prototypes can find it
+        splits_dir = tmp_path / "data" / "splits" / "WLASL10"
+        splits_dir.mkdir(parents=True)
+        processed_dir = tmp_path / "data" / "processed"
+        processed_dir.mkdir(parents=True)
+
+        import pandas as pd
+        rows = []
+        for i in range(20):
+            vid = f"vid_{i:03d}"
+            rows.append({"video_id": vid, "label_idx": i % 10, "gloss": f"sign_{i % 10}"})
+            kps = np.random.rand(30, NUM_KP, 3).astype(np.float32)
+            np.save(str(processed_dir / f"{vid}.npy"), kps)
+        pd.DataFrame(rows).to_csv(splits_dir / "train.csv", index=False)
+
+        cfg.data_dir = str(tmp_path / "data")
         predictor = SignPredictor(
             checkpoint_path=ckpt_path, cfg=cfg, device="cpu",
             class_names=class_names,

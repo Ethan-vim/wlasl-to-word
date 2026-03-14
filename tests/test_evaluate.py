@@ -13,6 +13,8 @@ from src.training.evaluate import (
     find_hard_negatives,
     plot_confusion_matrix,
 )
+from src.models.prototypical import PrototypicalNetwork
+from src.models.stgcn import STGCNEncoder
 
 NUM_KP = 543
 
@@ -58,19 +60,17 @@ class TestFlipKeypointsTensor:
 
 class TestComputeMetrics:
     def _make_model_and_loader(self, num_classes=5, num_samples=20):
-        """Create a simple model and DataLoader for testing."""
-        class SimpleModel(nn.Module):
-            def __init__(self, in_dim, num_classes):
-                super().__init__()
-                self.fc = nn.Linear(in_dim, num_classes)
-            def forward(self, x):
-                return self.fc(x.mean(dim=1))
-
-        in_dim = NUM_KP * 3
-        model = SimpleModel(in_dim, num_classes)
+        """Create a prototypical model with pre-set prototypes and DataLoader."""
+        encoder = STGCNEncoder(
+            num_keypoints=NUM_KP, embedding_dim=64,
+            channels=[32, 64], dropout=0.0,
+        )
+        model = PrototypicalNetwork(encoder)
+        model.prototypes = torch.randn(num_classes, 64)
+        model._num_classes = num_classes
         model.eval()
 
-        data = torch.randn(num_samples, 16, in_dim)
+        data = torch.randn(num_samples, 16, NUM_KP * 3)
         labels = torch.randint(0, num_classes, (num_samples,))
         dataset = TensorDataset(data, labels)
         loader = DataLoader(dataset, batch_size=4)
@@ -157,17 +157,29 @@ class TestFindHardNegatives:
 
 class TestEvaluateLatency:
     def test_returns_expected_keys(self):
-        model = nn.Linear(100, 10)
+        encoder = STGCNEncoder(
+            num_keypoints=NUM_KP, embedding_dim=64,
+            channels=[32, 64], dropout=0.0,
+        )
+        model = PrototypicalNetwork(encoder)
+        model.prototypes = torch.randn(5, 64)
+        model._num_classes = 5
         model.eval()
-        result = evaluate_latency(model, torch.device("cpu"), (100,), n_runs=5)
+        result = evaluate_latency(model, torch.device("cpu"), (16, NUM_KP * 3), n_runs=5)
         assert "mean_ms" in result
         assert "std_ms" in result
         assert "fps" in result
 
     def test_latency_positive(self):
-        model = nn.Linear(100, 10)
+        encoder = STGCNEncoder(
+            num_keypoints=NUM_KP, embedding_dim=64,
+            channels=[32, 64], dropout=0.0,
+        )
+        model = PrototypicalNetwork(encoder)
+        model.prototypes = torch.randn(5, 64)
+        model._num_classes = 5
         model.eval()
-        result = evaluate_latency(model, torch.device("cpu"), (100,), n_runs=5)
+        result = evaluate_latency(model, torch.device("cpu"), (16, NUM_KP * 3), n_runs=5)
         assert result["mean_ms"] > 0
         assert result["fps"] > 0
 

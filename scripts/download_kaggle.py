@@ -217,7 +217,7 @@ def main() -> None:
        python -m src.data.preprocess --data-dir {data_dir} --subset {args.subset}
 
   3. Train:
-       python -m src.training.train --config configs/pose_transformer.yaml
+       python -m src.training.train --config configs/stgcn_proto.yaml
 """)
 
 

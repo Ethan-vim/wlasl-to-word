@@ -32,52 +32,50 @@ class Config:
     # --- Dataset ---
     wlasl_variant: int = 100
     T: int = 64
-    image_size: int = 224
     num_workers: int = 4
 
-    # --- Model ---
-    approach: str = "pose_transformer"  # pose_transformer, pose_bilstm, video, fusion
-    backbone: str = "r2plus1d_18"
+    # --- Model (ST-GCN) ---
+    approach: str = "stgcn_proto"
     num_keypoints: int = 543
     num_classes: int = 100
-    d_model: int = 128
-    nhead: int = 4
-    num_layers: int = 3
-    dropout: float = 0.5
-    pretrained: bool = True
-
-    # Fusion-specific
-    fusion: str = "concat"  # concat or attention
-    fusion_dim: int = 256
+    d_model: int = 128  # embedding dimension (alias for embedding_dim)
+    embedding_dim: int = 128
+    gcn_channels: list[int] = field(default_factory=lambda: [64, 128, 128])
+    num_layers: int = 3  # number of ST-GCN blocks per branch
+    dropout: float = 0.1
 
     # --- Features ---
-    use_motion: bool = True  # Concatenate velocity (frame differences) with position
+    use_motion: bool = True
+
+    # --- Prototypical training ---
+    n_way: int = 20
+    k_shot: int = 3
+    q_query: int = 2
+    num_episodes: int = 500
 
     # --- Training ---
-    epochs: int = 100
+    epochs: int = 200
     batch_size: int = 32
-    lr: float = 3e-4
-    weight_decay: float = 1e-3
+    lr: float = 1e-3
+    weight_decay: float = 1e-4
     warmup_epochs: int = 10
-    label_smoothing: float = 0.05
     grad_clip: float = 1.0
-    fp16: bool = True
+    fp16: bool = False
     weighted_sampling: bool = False
-    early_stopping_patience: int = 15
-    mixup_alpha: float = 0.4  # Mixup interpolation parameter (0 = disabled)
+    early_stopping_patience: int = 30
 
     # --- Scheduler ---
-    scheduler: str = "onecycle"  # onecycle or cosine
+    scheduler: str = "cosine"
 
     # --- Logging ---
     use_wandb: bool = False
     use_tensorboard: bool = True
     wandb_project: str = "wlasl-recognition"
     wandb_run_name: Optional[str] = None
-    log_interval: int = 10  # steps between logging
+    log_interval: int = 10
 
     # --- Evaluation ---
-    use_tta: bool = False  # Test-time augmentation (horizontal flip averaging)
+    use_tta: bool = False
 
     # --- Inference ---
     confidence_threshold: float = 0.6
@@ -89,39 +87,27 @@ class Config:
     resume_checkpoint: Optional[str] = None
 
     def __post_init__(self) -> None:
-        """Derive num_classes and model architecture from wlasl_variant.
-
-        Smaller subsets scale down transformer size AND dropout to keep the
-        regularisation proportional to model capacity.  Without this, a tiny
-        model (d_model=64, 1 layer) paired with high dropout (0.5) has so much
-        noise in the gradient that the loss never meaningfully decreases.
-
-        Architecture auto-scaling only applies to pose-based approaches
-        (pose_transformer, pose_bilstm) and the pose sub-model in fusion.
-        Video classifiers use pretrained 3D CNN backbones with their own
-        optimal dropout (typically 0.3-0.5), so we leave dropout untouched
-        for the ``video`` approach.
-        """
+        """Derive num_classes from wlasl_variant and sync embedding_dim."""
         variant_to_classes = {100: 100, 300: 300, 1000: 1000, 2000: 2000}
         if self.wlasl_variant in variant_to_classes:
             self.num_classes = variant_to_classes[self.wlasl_variant]
 
+        # Keep embedding_dim and d_model in sync
+        self.embedding_dim = self.d_model
+
+        # Scale ST-GCN channels by variant
         variant_to_arch = {
-            100:  {"d_model": 128, "nhead": 4, "num_layers": 2, "dropout": 0.1},
-            300:  {"d_model": 192, "nhead": 6, "num_layers": 4, "dropout": 0.3},
-            1000: {"d_model": 256, "nhead": 8, "num_layers": 5, "dropout": 0.4},
-            2000: {"d_model": 384, "nhead": 8, "num_layers": 6, "dropout": 0.5},
+            100:  {"gcn_channels": [64, 128, 128], "d_model": 128, "dropout": 0.1},
+            300:  {"gcn_channels": [64, 128, 256], "d_model": 192, "dropout": 0.15},
+            1000: {"gcn_channels": [64, 128, 256], "d_model": 256, "dropout": 0.2},
+            2000: {"gcn_channels": [64, 128, 256, 256], "d_model": 384, "dropout": 0.2},
         }
         if self.wlasl_variant in variant_to_arch:
             arch = variant_to_arch[self.wlasl_variant]
+            self.gcn_channels = arch["gcn_channels"]
             self.d_model = arch["d_model"]
-            self.nhead = arch["nhead"]
-            self.num_layers = arch["num_layers"]
-            # Only override dropout for pose-based approaches.  Video
-            # classifiers use pretrained backbones that need their own
-            # dropout (typically 0.3-0.5 for 3D CNNs).
-            if self.approach != "video":
-                self.dropout = arch["dropout"]
+            self.embedding_dim = arch["d_model"]
+            self.dropout = arch["dropout"]
 
 
 def load_config(path: str | Path) -> Config:
