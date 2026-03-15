@@ -337,7 +337,9 @@ def main(cfg: Config) -> None:
         if ckpt_path.exists():
             logger.info("Resuming from %s", ckpt_path)
             ckpt = torch.load(str(ckpt_path), map_location=device, weights_only=False)
-            model.load_state_dict(ckpt["model_state_dict"])
+            state_dict = ckpt["model_state_dict"]
+            state_dict.pop("prototypes", None)
+            model.load_state_dict(state_dict, strict=False)
             optimizer.load_state_dict(ckpt["optimizer_state_dict"])
             if "scheduler_state_dict" in ckpt and scheduler is not None:
                 scheduler.load_state_dict(ckpt["scheduler_state_dict"])

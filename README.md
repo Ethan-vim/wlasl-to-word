@@ -277,7 +277,7 @@ python scripts/download_kaggle.py --subset WLASL100
 # 5. Validate and clean up bad files
 python scripts/validate_videos.py --video-dir data/raw --delete
 
-# 6. Extract keypoints
+# 6. Extract keypoints (use --model-complexity 1 for ~2-3x faster extraction)
 python -m src.data.preprocess --data-dir data --subset WLASL100 --mode keypoints
 
 # 7. Train (see device-specific configs below)
@@ -398,13 +398,23 @@ MPS limitations: `pin_memory`, `non_blocking`, `torch.cdist` backward, and `torc
 
 The preprocessing pipeline is **source-agnostic** — it reads mp4 files from `data/raw/` regardless of whether they were downloaded via Kaggle (Option A) or URL-based scripts (Option B). No extra flags or options are needed.
 
-Extract MediaPipe Holistic keypoints (543 landmarks per frame) from all valid videos. The extraction uses `model_complexity=2` with lower detection/tracking confidence thresholds (0.3) to maximize the number of frames with valid keypoints:
+Extract MediaPipe Holistic keypoints (543 landmarks per frame) from all valid videos. The extraction uses `model_complexity=2` by default with lower detection/tracking confidence thresholds (0.3) to maximize the number of frames with valid keypoints:
 
 ```bash
 python -m src.data.preprocess --data-dir data --subset WLASL100 --mode keypoints
 ```
 
-> **Note:** If you previously preprocessed data with older settings (model_complexity=1, confidence thresholds=0.5), regenerate your keypoints by deleting `data/processed/` and re-running the command above. The new settings produce higher quality keypoints and capture more frames.
+For faster extraction on CPU (especially Intel), use `--model-complexity 1` which is ~2-3x faster with minimal quality loss for sign language:
+
+```bash
+python -m src.data.preprocess --data-dir data --subset WLASL100 --mode keypoints --model-complexity 1
+```
+
+| `--model-complexity` | Speed   | Accuracy | Recommended for |
+|----------------------|---------|----------|-----------------|
+| `0`                  | Fastest | Lowest   | Quick testing only |
+| `1`                  | Fast    | Good     | CPU-bound machines, large datasets |
+| `2` (default)        | Slow    | Best     | GPU machines, final training data |
 
 This creates:
 

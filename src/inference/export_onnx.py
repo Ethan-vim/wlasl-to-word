@@ -157,7 +157,10 @@ if __name__ == "__main__":
 
     model = build_model(cfg)
     ckpt = torch.load(args.checkpoint, map_location=device, weights_only=False)
-    model.load_state_dict(ckpt["model_state_dict"])
+    state_dict = ckpt["model_state_dict"]
+    # Remove prototypes from checkpoint — they'll be recomputed from training data
+    state_dict.pop("prototypes", None)
+    model.load_state_dict(state_dict, strict=False)
     model.eval()
 
     onnx_path = export_to_onnx(model, cfg, args.output, opset=args.opset)

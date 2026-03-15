@@ -301,6 +301,7 @@ def extract_frames(
 def extract_keypoints_mediapipe(
     video_path: str | Path,
     output_path: str | Path,
+    model_complexity: int = 2,
 ) -> Optional[np.ndarray]:
     """Run MediaPipe Holistic on every frame and save keypoints as .npy.
 
@@ -314,6 +315,9 @@ def extract_keypoints_mediapipe(
         Path to the input video.
     output_path : str or Path
         Destination ``.npy`` file path.
+    model_complexity : int
+        MediaPipe Holistic model complexity (0, 1, or 2). Higher is more
+        accurate but slower. Default 2.
 
     Returns
     -------
@@ -332,7 +336,7 @@ def extract_keypoints_mediapipe(
         return None
     holistic = mp_holistic.Holistic(
         static_image_mode=False,
-        model_complexity=2,
+        model_complexity=model_complexity,
         min_detection_confidence=0.3,
         min_tracking_confidence=0.3,
     )
@@ -474,14 +478,15 @@ def _process_single_video(args: tuple) -> Optional[str]:
     Parameters
     ----------
     args : tuple
-        (video_id, video_path, output_path)
+        (video_id, video_path, output_path, model_complexity)
 
     Returns
     -------
     str or None
         video_id on success, None on failure.
     """
-    video_id, video_path, output_path = args
+    video_id, video_path, output_path = args[:3]
+    model_complexity = args[3] if len(args) > 3 else 2
     video_path = Path(video_path)
     output_path = Path(output_path)
 
@@ -491,7 +496,7 @@ def _process_single_video(args: tuple) -> Optional[str]:
     if not video_path.exists():
         return None
 
-    result = extract_keypoints_mediapipe(video_path, output_path)
+    result = extract_keypoints_mediapipe(video_path, output_path, model_complexity=model_complexity)
     if result is None:
         return None
 
@@ -507,6 +512,7 @@ def preprocess_dataset(
     output_dir: str | Path,
     mode: str = "keypoints",
     max_workers: int = 4,
+    model_complexity: int = 2,
 ) -> pd.DataFrame:
     """Orchestrate full preprocessing for all videos in the annotation DataFrame.
 
@@ -523,6 +529,8 @@ def preprocess_dataset(
         ``'frames'`` to extract JPEG frames.
     max_workers : int
         Number of parallel workers for processing.
+    model_complexity : int
+        MediaPipe Holistic model complexity (0, 1, or 2). Default 2.
 
     Returns
     -------
@@ -548,7 +556,7 @@ def preprocess_dataset(
                 video_path = video_dir / f"{vid}.mp4"
 
             out_path = output_dir / f"{vid}.npy"
-            tasks.append((vid, str(video_path), str(out_path)))
+            tasks.append((vid, str(video_path), str(out_path), model_complexity))
 
         successful_ids = set()
         # Use "spawn" context to avoid fork + MediaPipe crashes on macOS
@@ -679,6 +687,15 @@ def main() -> None:
         default=4,
         help="Number of parallel workers (default: 4)",
     )
+    parser.add_argument(
+        "--model-complexity",
+        type=int,
+        default=2,
+        choices=[0, 1, 2],
+        help="MediaPipe Holistic model complexity (default: 2). "
+        "Lower values are faster but less accurate. "
+        "1 is ~2-3x faster than 2 with minimal quality loss for sign language.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -703,6 +720,7 @@ def main() -> None:
         output_dir=output_dir,
         mode=args.mode,
         max_workers=args.max_workers,
+        model_complexity=args.model_complexity,
     )
 
     # Step 4: Create splits (stored under a variant-specific subdirectory so

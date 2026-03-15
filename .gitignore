@@ -58,3 +58,6 @@ WLASL/
 
 # Wandb
 wandb/
+
+# Others
+errors.txt

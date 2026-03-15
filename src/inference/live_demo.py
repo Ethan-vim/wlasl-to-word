@@ -124,7 +124,10 @@ class LivePredictor:
         ckpt = torch.load(
             str(checkpoint_path), map_location=self.device, weights_only=False
         )
-        self.model.load_state_dict(ckpt["model_state_dict"])
+        state_dict = ckpt["model_state_dict"]
+        # Remove prototypes from checkpoint — they'll be recomputed from training data
+        state_dict.pop("prototypes", None)
+        self.model.load_state_dict(state_dict, strict=False)
         self.model.to(self.device)
         self.model.eval()
 
