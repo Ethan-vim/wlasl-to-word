@@ -141,9 +141,10 @@ class LivePredictor:
         self._mp_drawing_styles = styles_mod
         self.holistic = self._mp_holistic.Holistic(
             static_image_mode=False,
-            model_complexity=1,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
+            model_complexity=2,
+            min_detection_confidence=0.3,
+            min_tracking_confidence=0.3,
+            refine_face_landmarks=True,
         )
 
         logger.info("LivePredictor initialized (device=%s)", self.device)
